@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VirtualSpaceViewer } from '../components/VirtualSpaceViewer';
 import { SimpleVirtualSpaceViewer } from '../components/SimpleVirtualSpaceViewer';
 import { AdvancedThreeScene } from '../components/AdvancedThreeScene';
@@ -40,6 +40,45 @@ const testSpace: VirtualSpace = {
 export const TestPage: React.FC = () => {
   const [showBasicTest, setShowBasicTest] = useState(true);
   const [testMode, setTestMode] = useState<'simple' | '3d' | 'advanced'>('simple');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [apiUrl, setApiUrl] = useState('');
+
+  useEffect(() => {
+    // API接続状態をチェック
+    const checkConnection = async () => {
+      try {
+        const hostname = window.location.hostname;
+        const baseUrl = hostname !== 'localhost' && hostname !== '127.0.0.1'
+          ? `http://${hostname}:3001/api`
+          : 'http://localhost:3001/api';
+
+        setApiUrl(baseUrl);
+
+        console.log('🔧 Checking connection to:', baseUrl);
+
+        const response = await fetch(`${baseUrl}/health`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Connection successful:', data);
+          setConnectionStatus('connected');
+        } else {
+          console.error('❌ Connection failed:', response.status);
+          setConnectionStatus('error');
+        }
+      } catch (error) {
+        console.error('❌ Connection error:', error);
+        setConnectionStatus('error');
+      }
+    };
+
+    checkConnection();
+  }, []);
 
   if (!showBasicTest) {
     return (
@@ -96,6 +135,33 @@ export const TestPage: React.FC = () => {
         このページが表示されていれば、基本的なReactアプリは動作しています。
       </p>
 
+      {/* 接続状態表示 */}
+      <div className={`p-4 rounded-lg mb-4 ${connectionStatus === 'connected' ? 'bg-green-100' :
+        connectionStatus === 'error' ? 'bg-red-100' : 'bg-yellow-100'
+        }`}>
+        <h2 className={`text-xl font-bold mb-2 ${connectionStatus === 'connected' ? 'text-green-800' :
+          connectionStatus === 'error' ? 'text-red-800' : 'text-yellow-800'
+          }`}>
+          {connectionStatus === 'connected' ? '✅ バックエンド接続状態' :
+            connectionStatus === 'error' ? '❌ バックエンド接続エラー' : '🔄 バックエンド接続確認中'}
+        </h2>
+        <ul className={`${connectionStatus === 'connected' ? 'text-green-700' :
+          connectionStatus === 'error' ? 'text-red-700' : 'text-yellow-700'
+          }`}>
+          <li>API URL: {apiUrl}</li>
+          <li>ホスト名: {window.location.hostname}</li>
+          <li>プロトコル: {window.location.protocol}</li>
+          <li>ポート: {window.location.port || '(デフォルト)'}</li>
+          {connectionStatus === 'connected' && <li>✅ ログイン・登録機能が利用可能です</li>}
+          {connectionStatus === 'error' && (
+            <>
+              <li>❌ バックエンドサーバーに接続できません</li>
+              <li>🔧 バックエンドサーバーが起動しているか確認してください</li>
+            </>
+          )}
+        </ul>
+      </div>
+
       <div className="bg-blue-100 p-4 rounded-lg mb-4">
         <h2 className="text-xl font-bold text-blue-800 mb-2">システム情報</h2>
         <ul className="text-blue-700">
@@ -104,6 +170,7 @@ export const TestPage: React.FC = () => {
           <li>✅ TypeScript: 動作中</li>
           <li>✅ Three.js: インストール済み</li>
           <li>🚀 高度な3D機能: 実装完了</li>
+          <li>🛡️ エラーハンドリング: 追加済み</li>
         </ul>
       </div>
 
@@ -208,10 +275,26 @@ export const TestPage: React.FC = () => {
 
       <div className="bg-yellow-100 p-4 rounded-lg">
         <h2 className="text-xl font-bold text-yellow-800 mb-2">🔧 アクセス方法</h2>
-        <p className="text-yellow-700">
-          URL: <code className="bg-yellow-200 px-2 py-1 rounded">http://localhost:5173/test</code>
-        </p>
-        <div className="text-yellow-700 mt-2 text-sm space-y-1">
+        <div className="text-yellow-700 space-y-2">
+          <div>
+            <strong>PC:</strong> <code className="bg-yellow-200 px-2 py-1 rounded">http://localhost:5174/test</code>
+          </div>
+          <div>
+            <strong>スマホ:</strong> <code className="bg-yellow-200 px-2 py-1 rounded">http://{window.location.hostname}:5174/test</code>
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-yellow-200 rounded-lg">
+          <h3 className="font-semibold mb-2 text-yellow-800">📱 スマホ使用時の注意</h3>
+          <ul className="text-sm space-y-1 text-yellow-700">
+            <li>• パフォーマンス向上のため軽量モードで動作します</li>
+            <li>• シャドウやエフェクトが簡素化されます</li>
+            <li>• エラーが発生した場合は「シンプル表示」をお試しください</li>
+            <li>• WiFi環境での使用を推奨します</li>
+          </ul>
+        </div>
+
+        <div className="text-yellow-700 mt-4 text-sm space-y-1">
           <div>💡 <strong>操作方法:</strong></div>
           <div>• 🔤 WASD: プレイヤー移動（PC）</div>
           <div>• 🕹️ バーチャルジョイスティック: 移動・視点（モバイル）</div>

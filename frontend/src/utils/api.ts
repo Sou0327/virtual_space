@@ -1,7 +1,25 @@
 import axios from 'axios';
 import type { ApiResponse } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const getApiBaseUrl = () => {
+  // 環境変数が設定されている場合はそれを使用
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // 現在のホスト名を確認
+  const hostname = window.location.hostname;
+  
+  // localhostやIPアドレスの場合、同じホストでバックエンドアクセス
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return `http://${hostname}:3001/api`;
+  }
+  
+  // デフォルトはlocalhost
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 console.log('🔧 API Configuration:', {
   baseURL: API_BASE_URL,

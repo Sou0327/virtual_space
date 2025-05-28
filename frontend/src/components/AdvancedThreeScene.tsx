@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, Text, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -28,6 +28,89 @@ interface AdvancedThreeSceneProps {
   space: VirtualSpace;
   onUserMove?: (position: { x: number; y: number; z: number }) => void;
 }
+
+// エラーバウンダリコンポーネント
+class AdvancedThreeErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    console.error('Advanced Three.js Error:', error);
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('Advanced Three.js Error Details:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full bg-gradient-to-br from-purple-900 to-blue-900 text-white">
+          <div className="text-center">
+            <h3 className="text-2xl mb-2">🚀 高度3Dシステムエラー</h3>
+            <p className="text-sm mb-4">高度な3D機能の読み込みに失敗しました</p>
+            <div className="space-x-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-purple-600 rounded hover:bg-purple-700"
+              >
+                再読み込み
+              </button>
+              <button
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+              >
+                基本3Dに戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// 高度なローディングコンポーネント
+const AdvancedLoadingSpinner: React.FC = () => (
+  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-900 z-10">
+    <div className="text-center text-white">
+      <div className="relative">
+        <div className="animate-spin w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+        <div className="animate-pulse absolute inset-0 w-16 h-16 border-4 border-blue-400 border-b-transparent rounded-full mx-auto"></div>
+      </div>
+      <p className="text-xl mb-2">🚀 高度3D空間を生成中...</p>
+      <p className="text-sm opacity-70">最新の3D技術を読み込んでいます</p>
+    </div>
+  </div>
+);
+
+// Canvas設定の最適化
+const AdvancedCanvasSettings = {
+  shadows: true,
+  dpr: [1, 2] as [number, number],
+  performance: { min: 0.3 },
+  gl: {
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance' as const,
+    shadowMap: {
+      enabled: true,
+      type: THREE.PCFSoftShadowMap,
+    },
+  },
+  shadowMap: {
+    enabled: true,
+    type: THREE.PCFSoftShadowMap,
+  },
+};
 
 // 高度な環境システム
 const AdvancedEnvironment: React.FC<{ template: VirtualSpace['template'] }> = ({ template }) => {
@@ -542,161 +625,168 @@ export const AdvancedThreeScene: React.FC<AdvancedThreeSceneProps> = ({ space, o
   };
 
   return (
-    <div className="w-full h-full relative">
-      {/* 視点切り替えUI（デスクトップのみ） */}
-      {!isMobile && (
-        <div className="absolute top-4 right-4 z-50 space-x-2">
-          <button
-            onClick={() => setViewMode(viewMode === 'first-person' ? 'third-person' : 'first-person')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'first-person'
-              ? 'bg-orange-500 text-white hover:bg-orange-600'
-              : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-          >
-            {viewMode === 'first-person' ? '👁️ 1人称視点' : '🎮 3人称視点'}
-          </button>
+    <AdvancedThreeErrorBoundary>
+      <div className="w-full h-full relative">
+        {/* 視点切り替えUI（デスクトップのみ） */}
+        {!isMobile && (
+          <div className="absolute top-4 right-4 z-50 space-x-2">
+            <button
+              onClick={() => setViewMode(viewMode === 'first-person' ? 'third-person' : 'first-person')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${viewMode === 'first-person'
+                ? 'bg-orange-500 text-white hover:bg-orange-600'
+                : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+            >
+              {viewMode === 'first-person' ? '👁️ 1人称視点' : '🎮 3人称視点'}
+            </button>
+          </div>
+        )}
+
+        {/* 操作説明UI */}
+        <div className="absolute bottom-4 left-4 z-50 bg-black bg-opacity-70 text-white p-3 rounded-lg text-sm pointer-events-none">
+          <div className="space-y-1">
+            <div className="text-yellow-300 font-semibold">🎮 操作方法:</div>
+            {isMobile ? (
+              <>
+                <div>🕹️ 左ジョイスティック: 移動</div>
+                <div>🎯 右ジョイスティック: 視点</div>
+                <div>🚀 黄色ボタン: ジャンプ</div>
+                <div>👆 タッチ: オブジェクト詳細</div>
+              </>
+            ) : (
+              <>
+                <div>🔤 WASD: 移動</div>
+                <div>🚀 Space: ジャンプ</div>
+                <div>⚡ Shift: 走る</div>
+                <div>🖱️ マウス: 視点回転</div>
+                <div>👁️ 右上ボタン: 視点切り替え</div>
+              </>
+            )}
+            {isPlayerMoving && (
+              <div className="text-green-300">🏃 移動中...</div>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* 操作説明UI */}
-      <div className="absolute bottom-4 left-4 z-50 bg-black bg-opacity-70 text-white p-3 rounded-lg text-sm pointer-events-none">
-        <div className="space-y-1">
-          <div className="text-yellow-300 font-semibold">🎮 操作方法:</div>
-          {isMobile ? (
-            <>
-              <div>🕹️ 左ジョイスティック: 移動</div>
-              <div>🎯 右ジョイスティック: 視点</div>
-              <div>🚀 黄色ボタン: ジャンプ</div>
-              <div>👆 タッチ: オブジェクト詳細</div>
-            </>
-          ) : (
-            <>
-              <div>🔤 WASD: 移動</div>
-              <div>🚀 Space: ジャンプ</div>
-              <div>⚡ Shift: 走る</div>
-              <div>🖱️ マウス: 視点回転</div>
-              <div>👁️ 右上ボタン: 視点切り替え</div>
-            </>
-          )}
-          {isPlayerMoving && (
-            <div className="text-green-300">🏃 移動中...</div>
-          )}
-        </div>
-      </div>
-
-      {/* モバイル用バーチャルジョイスティック */}
-      {isMobile && (
-        <VirtualJoystick
-          onMove={(x, y) => setVirtualMoveInput({ x, y })}
-          onLook={(x, y) => setVirtualLookInput({ x, y })}
-          size={120}
-          deadZone={0.1}
-        />
-      )}
-
-      <Canvas
-        shadows
-        camera={{
-          position: [0, 8, 15],
-          fov: viewMode === 'first-person' ? 75 : 60
-        }}
-        gl={{
-          antialias: true
-        }}
-        style={{ pointerEvents: 'auto' }}
-      >
-        {/* 高度なライティング */}
-        <ambientLight intensity={0.3} />
-        <directionalLight
-          position={[20, 20, 10]}
-          intensity={1.5}
-          castShadow
-          shadow-mapSize-width={4096}
-          shadow-mapSize-height={4096}
-          shadow-camera-far={100}
-          shadow-camera-left={-50}
-          shadow-camera-right={50}
-          shadow-camera-top={50}
-          shadow-camera-bottom={-50}
-        />
-
-        {/* プレイヤーコントローラー */}
-        <PlayerController
-          position={playerPosition}
-          onMove={handlePlayerMove}
-          onRotate={handlePlayerRotate}
-          speed={8}
-          jumpHeight={12}
-          viewMode={viewMode}
-          virtualMoveInput={virtualMoveInput}
-          virtualLookInput={virtualLookInput}
-        />
-
-        {/* タッチインタラクション */}
+        {/* モバイル用バーチャルジョイスティック */}
         {isMobile && (
-          <TouchInteraction onObjectTouch={handleObjectTouch} />
-        )}
-
-        {/* 高度な環境 */}
-        <AdvancedEnvironment template={space.template} />
-
-        {/* プレイヤーアバター（3人称視点の場合のみ表示） */}
-        {viewMode === 'third-person' && (
-          <AdvancedAvatar
-            position={playerPosition}
-            color="#FF6B6B"
-            name="あなた"
-            isMoving={isPlayerMoving}
-            emotion="excited"
+          <VirtualJoystick
+            onMove={(x, y) => setVirtualMoveInput({ x, y })}
+            onLook={(x, y) => setVirtualLookInput({ x, y })}
+            size={120}
+            deadZone={0.1}
           />
         )}
 
-        {/* 高度なアバター */}
-        {otherUsers.map((user) => (
-          <AdvancedAvatar
-            key={user.id}
-            position={user.position}
-            color={user.color}
-            name={user.name}
-            isMoving={user.isMoving}
-            emotion={user.emotion}
-          />
-        ))}
+        <Suspense fallback={<AdvancedLoadingSpinner />}>
+          <Canvas
+            {...AdvancedCanvasSettings}
+            camera={{
+              position: [0, 8, 15],
+              fov: viewMode === 'first-person' ? 75 : 60
+            }}
+            style={{ pointerEvents: 'auto' }}
+            onCreated={(state) => {
+              console.log('🚀 Advanced Canvas created successfully:', state);
+            }}
+            onError={(error) => {
+              console.error('❌ Advanced Canvas error:', error);
+            }}
+          >
+            {/* 高度なライティング */}
+            <ambientLight intensity={0.3} />
+            <directionalLight
+              position={[20, 20, 10]}
+              intensity={1.5}
+              castShadow
+              shadow-mapSize-width={4096}
+              shadow-mapSize-height={4096}
+              shadow-camera-far={100}
+              shadow-camera-left={-50}
+              shadow-camera-right={50}
+              shadow-camera-top={50}
+              shadow-camera-bottom={-50}
+            />
 
-        {/* 空間タイトル（3D文字） */}
-        <Text
-          position={[0, 8, -8]}
-          fontSize={2}
-          color="#FFFFFF"
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.1}
-          outlineColor="#000000"
-        >
-          {space.title}
-        </Text>
+            {/* プレイヤーコントローラー */}
+            <PlayerController
+              position={playerPosition}
+              onMove={handlePlayerMove}
+              onRotate={handlePlayerRotate}
+              speed={8}
+              jumpHeight={12}
+              viewMode={viewMode}
+              virtualMoveInput={virtualMoveInput}
+              virtualLookInput={virtualLookInput}
+            />
 
-        {/* 爆発エフェクト */}
-        <ExplosionEffect
-          position={[0, 2, 0]}
-          isActive={explosionActive}
-          onComplete={() => setExplosionActive(false)}
-        />
+            {/* タッチインタラクション */}
+            {isMobile && (
+              <TouchInteraction onObjectTouch={handleObjectTouch} />
+            )}
 
-        {/* OrbitControlsは3人称視点かつデスクトップでのみ有効 */}
-        {viewMode === 'third-person' && !isMobile && (
-          <OrbitControls
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
-            minDistance={5}
-            maxDistance={50}
-            maxPolarAngle={Math.PI / 2.2}
-            enableDamping={true}
-            dampingFactor={0.05}
-          />
-        )}
-      </Canvas>
-    </div>
+            {/* 高度な環境 */}
+            <AdvancedEnvironment template={space.template} />
+
+            {/* プレイヤーアバター（3人称視点の場合のみ表示） */}
+            {viewMode === 'third-person' && (
+              <AdvancedAvatar
+                position={playerPosition}
+                color="#FF6B6B"
+                name="あなた"
+                isMoving={isPlayerMoving}
+                emotion="excited"
+              />
+            )}
+
+            {/* 高度なアバター */}
+            {otherUsers.map((user) => (
+              <AdvancedAvatar
+                key={user.id}
+                position={user.position}
+                color={user.color}
+                name={user.name}
+                isMoving={user.isMoving}
+                emotion={user.emotion}
+              />
+            ))}
+
+            {/* 空間タイトル（3D文字） */}
+            <Text
+              position={[0, 8, -8]}
+              fontSize={2}
+              color="#FFFFFF"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.1}
+              outlineColor="#000000"
+            >
+              {space.title}
+            </Text>
+
+            {/* 爆発エフェクト */}
+            <ExplosionEffect
+              position={[0, 2, 0]}
+              isActive={explosionActive}
+              onComplete={() => setExplosionActive(false)}
+            />
+
+            {/* OrbitControlsは3人称視点かつデスクトップでのみ有効 */}
+            {viewMode === 'third-person' && !isMobile && (
+              <OrbitControls
+                enablePan={true}
+                enableZoom={true}
+                enableRotate={true}
+                minDistance={5}
+                maxDistance={50}
+                maxPolarAngle={Math.PI / 2.2}
+                enableDamping={true}
+                dampingFactor={0.05}
+              />
+            )}
+          </Canvas>
+        </Suspense>
+      </div>
+    </AdvancedThreeErrorBoundary>
   );
 };

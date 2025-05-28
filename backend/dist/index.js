@@ -29,7 +29,11 @@ const limiter = (0, express_rate_limit_1.default)({
 app.use((0, helmet_1.default)());
 app.use(limiter);
 app.use((0, cors_1.default)({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: [
+        'http://localhost:5173',
+        'http://192.168.11.13:5173',
+        process.env.FRONTEND_URL || ''
+    ].filter(url => url !== ''),
     credentials: true
 }));
 app.use(express_1.default.json());
@@ -57,8 +61,12 @@ app.use((err, req, res, next) => {
 async function startServer() {
     try {
         await (0, database_1.initializeDatabase)();
-        app.listen(PORT, () => {
-            console.log(`🚀 FanVerse API server is running on port ${PORT}`);
+        const port = Number(PORT);
+        app.listen(port, '0.0.0.0', () => {
+            console.log(`🚀 FanVerse API server is running on port ${port}`);
+            console.log(`🌐 Server accessible at:`);
+            console.log(`   Local:   http://localhost:${port}`);
+            console.log(`   Network: http://192.168.11.13:${port}`);
             console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
         });
     }
