@@ -16,15 +16,20 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
       return res.status(403).json({ success: false, message: 'Invalid token' });
     }
 
-    // Get user from database
-    db.get('SELECT * FROM users WHERE id = ?', [decoded.userId], (err, user: User) => {
-      if (err || !user) {
+    try {
+      // Get user from database using better-sqlite3 synchronous API
+      const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+      const user = stmt.get(decoded.userId) as User;
+      
+      if (!user) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
       
       req.user = user;
       next();
-    });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
   });
 };
 
@@ -41,11 +46,17 @@ export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction
       return next(); // Invalid token, but we'll continue without user
     }
 
-    db.get('SELECT * FROM users WHERE id = ?', [decoded.userId], (err, user: User) => {
-      if (!err && user) {
+    try {
+      const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+      const user = stmt.get(decoded.userId) as User;
+      
+      if (user) {
         req.user = user;
       }
       next();
-    });
+    } catch (error) {
+      // Database error, but we'll continue without user
+      next();
+    }
   });
 }; 

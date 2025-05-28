@@ -31,8 +31,10 @@ export interface VirtualSpace {
 export interface SpaceTemplate {
     id: string;
     name: string;
-    type: 'room' | 'stage' | 'gallery' | 'outdoor';
+    type: 'room' | 'stage' | 'gallery' | 'outdoor' | 'futuristic' | 'social';
+    description?: string;
     preview: string;
+    features?: string[];
 }
 export interface SpaceCustomization {
     wallTexture?: string;

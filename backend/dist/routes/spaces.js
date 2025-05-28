@@ -13,25 +13,49 @@ const defaultTemplates = [
         id: 'cozy-room',
         name: 'コージーな部屋',
         type: 'room',
-        preview: '/templates/cozy-room.jpg'
+        description: '温かみのある居心地の良い個人空間',
+        preview: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop&crop=center',
+        features: ['暖炉', 'ソファ', '本棚', '観葉植物']
     },
     {
         id: 'modern-stage',
         name: 'モダンステージ',
         type: 'stage',
-        preview: '/templates/modern-stage.jpg'
+        description: 'ライブパフォーマンス用のスタイリッシュなステージ',
+        preview: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&h=600&fit=crop&crop=center',
+        features: ['LED照明', 'スピーカー', 'ステージ', '観客席']
     },
     {
         id: 'art-gallery',
         name: 'アートギャラリー',
         type: 'gallery',
-        preview: '/templates/art-gallery.jpg'
+        description: '作品展示に最適な洗練されたギャラリー空間',
+        preview: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800&h=600&fit=crop&crop=center',
+        features: ['展示壁', 'スポットライト', '作品台', '案内板']
     },
     {
         id: 'outdoor-park',
         name: 'アウトドアパーク',
         type: 'outdoor',
-        preview: '/templates/outdoor-park.jpg'
+        description: '自然豊かな屋外空間でリラックス',
+        preview: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=600&fit=crop&crop=center',
+        features: ['芝生', '木々', 'ベンチ', '花壇']
+    },
+    {
+        id: 'cyber-space',
+        name: 'サイバー空間',
+        type: 'futuristic',
+        description: '未来的なデジタル空間',
+        preview: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800&h=600&fit=crop&crop=center',
+        features: ['ネオンライト', 'ホログラム', 'デジタル壁', 'フローティングパネル']
+    },
+    {
+        id: 'cafe-lounge',
+        name: 'カフェラウンジ',
+        type: 'social',
+        description: 'くつろぎながら交流できるカフェ空間',
+        preview: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&h=600&fit=crop&crop=center',
+        features: ['カウンター', 'テーブル', 'チェア', 'コーヒーマシン']
     }
 ];
 // Get available templates
@@ -70,32 +94,29 @@ router.post('/', auth_1.authenticateToken, (req, res) => {
         objects: [],
         content: []
     };
-    database_1.default.run('INSERT INTO virtual_spaces (userId, title, description, template, customization) VALUES (?, ?, ?, ?, ?)', [userId, title, description, JSON.stringify(template), JSON.stringify(defaultCustomization)], function (err) {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to create space'
-            });
-        }
+    try {
+        const insertStmt = database_1.default.prepare('INSERT INTO virtual_spaces (userId, title, description, template, customization) VALUES (?, ?, ?, ?, ?)');
+        const result = insertStmt.run(userId, title, description, JSON.stringify(template), JSON.stringify(defaultCustomization));
         res.status(201).json({
             success: true,
             message: 'Space created successfully',
             data: {
-                spaceId: this.lastID
+                spaceId: result.lastInsertRowid
             }
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to create space'
+        });
+    }
 });
 // Get user's spaces
 router.get('/my-spaces', auth_1.authenticateToken, (req, res) => {
     const userId = req.user?.id;
-    database_1.default.all('SELECT * FROM virtual_spaces WHERE userId = ? ORDER BY updatedAt DESC', [userId], (err, spaces) => {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Database error'
-            });
-        }
+    try {
+        const spaces = database_1.default.prepare('SELECT * FROM virtual_spaces WHERE userId = ? ORDER BY updatedAt DESC').all(userId);
         const formattedSpaces = spaces.map((space) => ({
             ...space,
             template: JSON.parse(space.template),
@@ -105,19 +126,20 @@ router.get('/my-spaces', auth_1.authenticateToken, (req, res) => {
             success: true,
             data: { spaces: formattedSpaces }
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 // Get space by ID
 router.get('/:spaceId', auth_1.optionalAuth, (req, res) => {
     const { spaceId } = req.params;
     const userId = req.user?.id;
-    database_1.default.get('SELECT vs.*, u.username, u.displayName FROM virtual_spaces vs JOIN users u ON vs.userId = u.id WHERE vs.id = ?', [spaceId], (err, space) => {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Database error'
-            });
-        }
+    try {
+        const space = database_1.default.prepare('SELECT vs.*, u.username, u.displayName FROM virtual_spaces vs JOIN users u ON vs.userId = u.id WHERE vs.id = ?').get(spaceId);
         if (!space) {
             return res.status(404).json({
                 success: false,
@@ -133,7 +155,7 @@ router.get('/:spaceId', auth_1.optionalAuth, (req, res) => {
         }
         // Increment visit count if not owner
         if (space.userId !== userId) {
-            database_1.default.run('UPDATE virtual_spaces SET visitCount = visitCount + 1 WHERE id = ?', [spaceId]);
+            database_1.default.prepare('UPDATE virtual_spaces SET visitCount = visitCount + 1 WHERE id = ?').run(spaceId);
         }
         const formattedSpace = {
             ...space,
@@ -144,72 +166,68 @@ router.get('/:spaceId', auth_1.optionalAuth, (req, res) => {
             success: true,
             data: { space: formattedSpace }
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 // Update space
 router.put('/:spaceId', auth_1.authenticateToken, (req, res) => {
     const { spaceId } = req.params;
     const { title, description, customization, isPublic } = req.body;
     const userId = req.user?.id;
-    // Check ownership
-    database_1.default.get('SELECT userId FROM virtual_spaces WHERE id = ?', [spaceId], (err, space) => {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Database error'
-            });
-        }
+    try {
+        // Check ownership
+        const space = database_1.default.prepare('SELECT userId FROM virtual_spaces WHERE id = ?').get(spaceId);
         if (!space || space.userId !== userId) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied'
             });
         }
-        database_1.default.run('UPDATE virtual_spaces SET title = ?, description = ?, customization = ?, isPublic = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [title, description, JSON.stringify(customization), isPublic, spaceId], function (err) {
-            if (err) {
-                return res.status(500).json({
-                    success: false,
-                    message: 'Failed to update space'
-                });
-            }
-            res.json({
-                success: true,
-                message: 'Space updated successfully'
-            });
+        const updateStmt = database_1.default.prepare('UPDATE virtual_spaces SET title = ?, description = ?, customization = ?, isPublic = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?');
+        updateStmt.run(title, description, JSON.stringify(customization), isPublic, spaceId);
+        res.json({
+            success: true,
+            message: 'Space updated successfully'
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 // Delete space
 router.delete('/:spaceId', auth_1.authenticateToken, (req, res) => {
     const { spaceId } = req.params;
     const userId = req.user?.id;
-    // Check ownership
-    database_1.default.get('SELECT userId FROM virtual_spaces WHERE id = ?', [spaceId], (err, space) => {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Database error'
-            });
-        }
+    try {
+        // Check ownership
+        const space = database_1.default.prepare('SELECT userId FROM virtual_spaces WHERE id = ?').get(spaceId);
         if (!space || space.userId !== userId) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied'
             });
         }
-        database_1.default.run('DELETE FROM virtual_spaces WHERE id = ?', [spaceId], function (err) {
-            if (err) {
-                return res.status(500).json({
-                    success: false,
-                    message: 'Failed to delete space'
-                });
-            }
-            res.json({
-                success: true,
-                message: 'Space deleted successfully'
-            });
+        const deleteStmt = database_1.default.prepare('DELETE FROM virtual_spaces WHERE id = ?');
+        deleteStmt.run(spaceId);
+        res.json({
+            success: true,
+            message: 'Space deleted successfully'
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 exports.default = router;
 //# sourceMappingURL=spaces.js.map

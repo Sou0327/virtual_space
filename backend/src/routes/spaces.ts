@@ -98,55 +98,48 @@ router.post('/', authenticateToken, (req: AuthRequest, res) => {
     content: []
   };
 
-  db.run(
-    'INSERT INTO virtual_spaces (userId, title, description, template, customization) VALUES (?, ?, ?, ?, ?)',
-    [userId, title, description, JSON.stringify(template), JSON.stringify(defaultCustomization)],
-    function(err) {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to create space'
-        });
-      }
+  try {
+    const insertStmt = db.prepare('INSERT INTO virtual_spaces (userId, title, description, template, customization) VALUES (?, ?, ?, ?, ?)');
+    const result = insertStmt.run(userId, title, description, JSON.stringify(template), JSON.stringify(defaultCustomization));
 
-      res.status(201).json({
-        success: true,
-        message: 'Space created successfully',
-        data: {
-          spaceId: this.lastID
-        }
-      });
-    }
-  );
+    res.status(201).json({
+      success: true,
+      message: 'Space created successfully',
+      data: {
+        spaceId: result.lastInsertRowid
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create space'
+    });
+  }
 });
 
 // Get user's spaces
 router.get('/my-spaces', authenticateToken, (req: AuthRequest, res) => {
   const userId = req.user?.id;
 
-  db.all(
-    'SELECT * FROM virtual_spaces WHERE userId = ? ORDER BY updatedAt DESC',
-    [userId],
-    (err, spaces) => {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          message: 'Database error'
-        });
-      }
+  try {
+    const spaces = db.prepare('SELECT * FROM virtual_spaces WHERE userId = ? ORDER BY updatedAt DESC').all(userId);
 
-      const formattedSpaces = spaces.map((space: any) => ({
-        ...space,
-        template: JSON.parse(space.template),
-        customization: JSON.parse(space.customization)
-      }));
+    const formattedSpaces = spaces.map((space: any) => ({
+      ...space,
+      template: JSON.parse(space.template),
+      customization: JSON.parse(space.customization)
+    }));
 
-      res.json({
-        success: true,
-        data: { spaces: formattedSpaces }
-      });
-    }
-  );
+    res.json({
+      success: true,
+      data: { spaces: formattedSpaces }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database error'
+    });
+  }
 });
 
 // Get space by ID
@@ -154,49 +147,45 @@ router.get('/:spaceId', optionalAuth, (req: AuthRequest, res) => {
   const { spaceId } = req.params;
   const userId = req.user?.id;
 
-  db.get(
-    'SELECT vs.*, u.username, u.displayName FROM virtual_spaces vs JOIN users u ON vs.userId = u.id WHERE vs.id = ?',
-    [spaceId],
-    (err, space: any) => {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          message: 'Database error'
-        });
-      }
+  try {
+    const space = db.prepare('SELECT vs.*, u.username, u.displayName FROM virtual_spaces vs JOIN users u ON vs.userId = u.id WHERE vs.id = ?').get(spaceId) as any;
 
-      if (!space) {
-        return res.status(404).json({
-          success: false,
-          message: 'Space not found'
-        });
-      }
-
-      // Check if space is public or user is owner
-      if (!space.isPublic && space.userId !== userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied'
-        });
-      }
-
-      // Increment visit count if not owner
-      if (space.userId !== userId) {
-        db.run('UPDATE virtual_spaces SET visitCount = visitCount + 1 WHERE id = ?', [spaceId]);
-      }
-
-      const formattedSpace = {
-        ...space,
-        template: JSON.parse(space.template),
-        customization: JSON.parse(space.customization)
-      };
-
-      res.json({
-        success: true,
-        data: { space: formattedSpace }
+    if (!space) {
+      return res.status(404).json({
+        success: false,
+        message: 'Space not found'
       });
     }
-  );
+
+    // Check if space is public or user is owner
+    if (!space.isPublic && space.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Increment visit count if not owner
+    if (space.userId !== userId) {
+      db.prepare('UPDATE virtual_spaces SET visitCount = visitCount + 1 WHERE id = ?').run(spaceId);
+    }
+
+    const formattedSpace = {
+      ...space,
+      template: JSON.parse(space.template),
+      customization: JSON.parse(space.customization)
+    };
+
+    res.json({
+      success: true,
+      data: { space: formattedSpace }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database error'
+    });
+  }
 });
 
 // Update space
@@ -205,14 +194,9 @@ router.put('/:spaceId', authenticateToken, (req: AuthRequest, res) => {
   const { title, description, customization, isPublic } = req.body;
   const userId = req.user?.id;
 
-  // Check ownership
-  db.get('SELECT userId FROM virtual_spaces WHERE id = ?', [spaceId], (err, space: any) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database error'
-      });
-    }
+  try {
+    // Check ownership
+    const space = db.prepare('SELECT userId FROM virtual_spaces WHERE id = ?').get(spaceId) as any;
 
     if (!space || space.userId !== userId) {
       return res.status(403).json({
@@ -221,24 +205,21 @@ router.put('/:spaceId', authenticateToken, (req: AuthRequest, res) => {
       });
     }
 
-    db.run(
-      'UPDATE virtual_spaces SET title = ?, description = ?, customization = ?, isPublic = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
-      [title, description, JSON.stringify(customization), isPublic, spaceId],
-      function(err) {
-        if (err) {
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to update space'
-          });
-        }
-
-        res.json({
-          success: true,
-          message: 'Space updated successfully'
-        });
-      }
+    const updateStmt = db.prepare(
+      'UPDATE virtual_spaces SET title = ?, description = ?, customization = ?, isPublic = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
     );
-  });
+    updateStmt.run(title, description, JSON.stringify(customization), isPublic, spaceId);
+
+    res.json({
+      success: true,
+      message: 'Space updated successfully'
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database error'
+    });
+  }
 });
 
 // Delete space
@@ -246,14 +227,9 @@ router.delete('/:spaceId', authenticateToken, (req: AuthRequest, res) => {
   const { spaceId } = req.params;
   const userId = req.user?.id;
 
-  // Check ownership
-  db.get('SELECT userId FROM virtual_spaces WHERE id = ?', [spaceId], (err, space: any) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database error'
-      });
-    }
+  try {
+    // Check ownership
+    const space = db.prepare('SELECT userId FROM virtual_spaces WHERE id = ?').get(spaceId) as any;
 
     if (!space || space.userId !== userId) {
       return res.status(403).json({
@@ -262,20 +238,19 @@ router.delete('/:spaceId', authenticateToken, (req: AuthRequest, res) => {
       });
     }
 
-    db.run('DELETE FROM virtual_spaces WHERE id = ?', [spaceId], function(err) {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to delete space'
-        });
-      }
+    const deleteStmt = db.prepare('DELETE FROM virtual_spaces WHERE id = ?');
+    deleteStmt.run(spaceId);
 
-      res.json({
-        success: true,
-        message: 'Space deleted successfully'
-      });
+    res.json({
+      success: true,
+      message: 'Space deleted successfully'
     });
-  });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database error'
+    });
+  }
 });
 
 export default router; 

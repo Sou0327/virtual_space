@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { VirtualSpace } from '../types';
+import { ThreeScene } from './ThreeScene';
+import { ThreeUI } from './ThreeUI';
 
 interface VirtualSpaceViewerProps {
   space: VirtualSpace;
@@ -12,10 +14,26 @@ export const VirtualSpaceViewer: React.FC<VirtualSpaceViewerProps> = ({
   onEnterSpace
 }) => {
   const [isEntered, setIsEntered] = useState(false);
+  const [is3DMode, setIs3DMode] = useState(false);
+  const [userPosition, setUserPosition] = useState({ x: 0, y: 0, z: 0 });
+  const [selectedObject, setSelectedObject] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleEnterSpace = () => {
     setIsEntered(true);
     onEnterSpace?.();
+  };
+
+  const handleUserMove = (position: { x: number; y: number; z: number }) => {
+    setUserPosition(position);
+  };
+
+  const toggle3DMode = () => {
+    setIs3DMode(!is3DMode);
+  };
+
+  const toggleHelp = () => {
+    setShowHelp(!showHelp);
   };
 
   const getBackgroundGradient = (type: string) => {
@@ -75,41 +93,74 @@ export const VirtualSpaceViewer: React.FC<VirtualSpaceViewerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="text-center">
-            <h3 className="text-3xl font-bold text-white mb-4">
-              {space.template.name}へようこそ！
-            </h3>
-            <p className="text-white/80 mb-6">
-              {space.description || 'この美しい空間でリラックスしてください'}
-            </p>
+          <>
+            {is3DMode ? (
+              <>
+                <ThreeScene space={space} onUserMove={handleUserMove} />
+                <ThreeUI
+                  userPosition={userPosition}
+                  selectedObject={selectedObject}
+                  onToggleHelp={toggleHelp}
+                  showHelp={showHelp}
+                />
+              </>
+            ) : (
+              <div className="text-center">
+                <h3 className="text-3xl font-bold text-white mb-4">
+                  {space.template.name}へようこそ！
+                </h3>
+                <p className="text-white/80 mb-6">
+                  {space.description || 'この美しい空間でリラックスしてください'}
+                </p>
 
-            {/* Template features */}
-            {space.template.features && space.template.features.length > 0 && (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
-                <h4 className="text-white font-medium mb-2">空間の特徴</h4>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {space.template.features.map((feature, index) => (
-                    <span
-                      key={index}
-                      className="bg-white/20 text-white px-3 py-1 rounded-full text-sm"
-                    >
-                      {feature}
-                    </span>
-                  ))}
+                {/* Template features */}
+                {space.template.features && space.template.features.length > 0 && (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                    <h4 className="text-white font-medium mb-2">空間の特徴</h4>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {space.template.features.map((feature, index) => (
+                        <span
+                          key={index}
+                          className="bg-white/20 text-white px-3 py-1 rounded-full text-sm"
+                        >
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-white/60 text-sm mb-6">
+                  <p>🎮 3D機能が利用可能になりました！</p>
+                  <p>💬 チャット機能は右下のボタンから利用可能</p>
                 </div>
+
+                <button
+                  onClick={toggle3DMode}
+                  className="bg-blue-500/80 hover:bg-blue-600/80 text-white px-8 py-3 rounded-lg font-medium transition-colors backdrop-blur-sm border border-blue-400/50"
+                >
+                  3D空間に入る
+                </button>
               </div>
             )}
-
-            <div className="text-white/60 text-sm">
-              <p>🎮 3D機能は今後のアップデートで追加予定</p>
-              <p>💬 チャット機能は右下のボタンから利用可能</p>
-            </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* Control Buttons */}
       <div className="absolute top-4 right-4 flex space-x-2">
+        {isEntered && (
+          <button
+            onClick={toggle3DMode}
+            className={`${is3DMode
+              ? 'bg-blue-500/80 hover:bg-blue-600/80'
+              : 'bg-gray-700/50 hover:bg-gray-600/50'
+              } text-white px-4 py-2 rounded-lg font-medium transition-colors backdrop-blur-sm`}
+            title={is3DMode ? '2Dビューに戻る' : '3Dビューに切り替え'}
+          >
+            {is3DMode ? '2D' : '3D'}
+          </button>
+        )}
         <button
           className="bg-gray-700/50 hover:bg-gray-600/50 text-white px-3 py-2 rounded-lg font-medium transition-colors backdrop-blur-sm"
           onClick={() => {
@@ -137,10 +188,15 @@ export const VirtualSpaceViewer: React.FC<VirtualSpaceViewerProps> = ({
 
       {/* Info overlay */}
       {isEntered && (
-        <div className="absolute bottom-4 left-4">
+        <div className="absolute bottom-4 left-4 space-y-2">
           <div className="bg-black/50 text-white px-3 py-2 rounded-lg text-sm backdrop-blur-sm">
             訪問者数: {space.visitCount}
           </div>
+          {is3DMode && (
+            <div className="bg-black/50 text-white px-3 py-2 rounded-lg text-sm backdrop-blur-sm">
+              位置: X:{userPosition.x.toFixed(1)} Y:{userPosition.y.toFixed(1)} Z:{userPosition.z.toFixed(1)}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -20,10 +20,8 @@ router.post('/register', async (req, res) => {
             });
         }
         // Check if user exists
-        database_1.default.get('SELECT * FROM users WHERE email = ? OR username = ?', [email, username], async (err, existingUser) => {
-            if (err) {
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
+        try {
+            const existingUser = database_1.default.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(email, username);
             if (existingUser) {
                 return res.status(400).json({
                     success: false,
@@ -33,28 +31,28 @@ router.post('/register', async (req, res) => {
             // Hash password
             const hashedPassword = await bcryptjs_1.default.hash(password, 10);
             // Insert user
-            database_1.default.run('INSERT INTO users (email, username, displayName, password, userType) VALUES (?, ?, ?, ?, ?)', [email, username, displayName, hashedPassword, userType], function (err) {
-                if (err) {
-                    return res.status(500).json({ success: false, message: 'Failed to create user' });
-                }
-                // Generate JWT
-                const token = jsonwebtoken_1.default.sign({ userId: this.lastID }, process.env.JWT_SECRET || 'fallback-secret', { expiresIn: '24h' });
-                res.status(201).json({
-                    success: true,
-                    message: 'User created successfully',
-                    data: {
-                        token,
-                        user: {
-                            id: this.lastID,
-                            email,
-                            username,
-                            displayName,
-                            userType
-                        }
+            const insertStmt = database_1.default.prepare('INSERT INTO users (email, username, displayName, password, userType) VALUES (?, ?, ?, ?, ?)');
+            const result = insertStmt.run(email, username, displayName, hashedPassword, userType);
+            // Generate JWT
+            const token = jsonwebtoken_1.default.sign({ userId: result.lastInsertRowid }, process.env.JWT_SECRET || 'fallback-secret', { expiresIn: '24h' });
+            res.status(201).json({
+                success: true,
+                message: 'User created successfully',
+                data: {
+                    token,
+                    user: {
+                        id: result.lastInsertRowid,
+                        email,
+                        username,
+                        displayName,
+                        userType
                     }
-                });
+                }
             });
-        });
+        }
+        catch (dbError) {
+            return res.status(500).json({ success: false, message: 'Database error' });
+        }
     }
     catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -70,10 +68,8 @@ router.post('/login', async (req, res) => {
                 message: 'Email and password are required'
             });
         }
-        database_1.default.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-            if (err) {
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
+        try {
+            const user = database_1.default.prepare('SELECT * FROM users WHERE email = ?').get(email);
             if (!user) {
                 return res.status(401).json({
                     success: false,
@@ -106,7 +102,10 @@ router.post('/login', async (req, res) => {
                     }
                 }
             });
-        });
+        }
+        catch (dbError) {
+            return res.status(500).json({ success: false, message: 'Database error' });
+        }
     }
     catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });

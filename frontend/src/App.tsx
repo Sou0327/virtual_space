@@ -8,10 +8,18 @@ import { CreateSpacePage } from './pages/CreateSpacePage';
 import { ExplorePage } from './pages/ExplorePage';
 import { SpaceViewPage } from './pages/SpaceViewPage';
 import { TestPage } from './pages/TestPage';
+import { SimpleTestPage } from './pages/SimpleTestPage';
+import { BasicTestPage } from './pages/BasicTestPage';
+import { DebugPage } from './pages/DebugPage';
+import { React19TestPage } from './pages/React19TestPage';
 import { useAuthStore } from './stores/authStore';
 
 // Protected Route Component
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 };
@@ -22,6 +30,10 @@ function App() {
       <div className="App">
         <Routes>
           <Route path="/" element={<SimpleHomePage />} />
+          <Route path="/basic-test" element={<BasicTestPage />} />
+          <Route path="/simple-test" element={<SimpleTestPage />} />
+          <Route path="/debug" element={<DebugPage />} />
+          <Route path="/react19-test" element={<React19TestPage />} />
           <Route path="/test" element={<TestPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

@@ -1,15 +1,15 @@
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import path from 'path';
 
 const dbPath = process.env.DATABASE_URL || path.join(__dirname, '../../database.sqlite');
-const db = new sqlite3.Database(dbPath);
+const db: Database.Database = new Database(dbPath);
 
 // Initialize database tables
 export const initializeDatabase = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    db.serialize(() => {
+    try {
       // Users table
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
@@ -26,7 +26,7 @@ export const initializeDatabase = (): Promise<void> => {
       `);
 
       // Virtual Spaces table
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS virtual_spaces (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           userId INTEGER NOT NULL,
@@ -43,7 +43,7 @@ export const initializeDatabase = (): Promise<void> => {
       `);
 
       // Chat Messages table
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS chat_messages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           spaceId INTEGER NOT NULL,
@@ -57,7 +57,7 @@ export const initializeDatabase = (): Promise<void> => {
       `);
 
       // Reactions table
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS reactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           spaceId INTEGER NOT NULL,
@@ -69,15 +69,13 @@ export const initializeDatabase = (): Promise<void> => {
           FOREIGN KEY (spaceId) REFERENCES virtual_spaces (id),
           FOREIGN KEY (userId) REFERENCES users (id)
         )
-      `, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          console.log('✅ Database tables initialized successfully');
-          resolve();
-        }
-      });
-    });
+      `);
+
+      console.log('✅ Database tables initialized successfully');
+      resolve();
+    } catch (err) {
+      reject(err);
+    }
   });
 };
 

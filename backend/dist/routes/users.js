@@ -26,29 +26,27 @@ router.put('/profile', auth_1.authenticateToken, (req, res) => {
             message: 'Display name is required'
         });
     }
-    database_1.default.run('UPDATE users SET displayName = ?, bio = ?, socialLinks = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [displayName, bio, JSON.stringify(socialLinks), userId], function (err) {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to update profile'
-            });
-        }
+    try {
+        const updateStmt = database_1.default.prepare('UPDATE users SET displayName = ?, bio = ?, socialLinks = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?');
+        updateStmt.run(displayName, bio, JSON.stringify(socialLinks), userId);
         res.json({
             success: true,
             message: 'Profile updated successfully'
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update profile'
+        });
+    }
 });
 // Get user by username (public profile)
 router.get('/:username', (req, res) => {
     const { username } = req.params;
-    database_1.default.get('SELECT id, username, displayName, userType, avatar, bio, socialLinks, createdAt FROM users WHERE username = ?', [username], (err, user) => {
-        if (err) {
-            return res.status(500).json({
-                success: false,
-                message: 'Database error'
-            });
-        }
+    try {
+        const stmt = database_1.default.prepare('SELECT id, username, displayName, userType, avatar, bio, socialLinks, createdAt FROM users WHERE username = ?');
+        const user = stmt.get(username);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -59,7 +57,13 @@ router.get('/:username', (req, res) => {
             success: true,
             data: { user }
         });
-    });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 exports.default = router;
 //# sourceMappingURL=users.js.map

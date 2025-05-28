@@ -4,16 +4,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeDatabase = void 0;
-const sqlite3_1 = __importDefault(require("sqlite3"));
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
 const dbPath = process.env.DATABASE_URL || path_1.default.join(__dirname, '../../database.sqlite');
-const db = new sqlite3_1.default.Database(dbPath);
+const db = new better_sqlite3_1.default(dbPath);
 // Initialize database tables
 const initializeDatabase = () => {
     return new Promise((resolve, reject) => {
-        db.serialize(() => {
+        try {
             // Users table
-            db.run(`
+            db.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
@@ -29,7 +29,7 @@ const initializeDatabase = () => {
         )
       `);
             // Virtual Spaces table
-            db.run(`
+            db.exec(`
         CREATE TABLE IF NOT EXISTS virtual_spaces (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           userId INTEGER NOT NULL,
@@ -45,7 +45,7 @@ const initializeDatabase = () => {
         )
       `);
             // Chat Messages table
-            db.run(`
+            db.exec(`
         CREATE TABLE IF NOT EXISTS chat_messages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           spaceId INTEGER NOT NULL,
@@ -58,7 +58,7 @@ const initializeDatabase = () => {
         )
       `);
             // Reactions table
-            db.run(`
+            db.exec(`
         CREATE TABLE IF NOT EXISTS reactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           spaceId INTEGER NOT NULL,
@@ -70,16 +70,13 @@ const initializeDatabase = () => {
           FOREIGN KEY (spaceId) REFERENCES virtual_spaces (id),
           FOREIGN KEY (userId) REFERENCES users (id)
         )
-      `, (err) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    console.log('✅ Database tables initialized successfully');
-                    resolve();
-                }
-            });
-        });
+      `);
+            console.log('✅ Database tables initialized successfully');
+            resolve();
+        }
+        catch (err) {
+            reject(err);
+        }
     });
 };
 exports.initializeDatabase = initializeDatabase;
