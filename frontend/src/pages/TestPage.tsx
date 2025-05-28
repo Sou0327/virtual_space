@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { VirtualSpaceViewer } from '../components/VirtualSpaceViewer';
 import { SimpleVirtualSpaceViewer } from '../components/SimpleVirtualSpaceViewer';
 import { AdvancedThreeScene } from '../components/AdvancedThreeScene';
+import { FantasyScene } from '../components/FantasyScene';
 import type { VirtualSpace } from '../types';
 
 // テスト用のダミーデータ
@@ -39,7 +40,7 @@ const testSpace: VirtualSpace = {
 
 export const TestPage: React.FC = () => {
   const [showBasicTest, setShowBasicTest] = useState(true);
-  const [testMode, setTestMode] = useState<'simple' | '3d' | 'advanced'>('simple');
+  const [testMode, setTestMode] = useState<'basic' | 'advanced' | 'fantasy'>('basic');
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [apiUrl, setApiUrl] = useState('');
 
@@ -91,17 +92,8 @@ export const TestPage: React.FC = () => {
             ← 基本テストに戻る
           </button>
           <button
-            onClick={() => setTestMode('simple')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${testMode === 'simple'
-              ? 'bg-green-500 text-white'
-              : 'bg-gray-500 text-white hover:bg-gray-600'
-              }`}
-          >
-            シンプル
-          </button>
-          <button
-            onClick={() => setTestMode('3d')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${testMode === '3d'
+            onClick={() => setTestMode('basic')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${testMode === 'basic'
               ? 'bg-blue-500 text-white'
               : 'bg-gray-500 text-white hover:bg-gray-600'
               }`}
@@ -117,12 +109,24 @@ export const TestPage: React.FC = () => {
           >
             🚀 高度3D
           </button>
+          <button
+            onClick={() => setTestMode('fantasy')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${testMode === 'fantasy'
+              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+              : 'bg-gray-500 text-white hover:bg-gray-600'
+              }`}
+          >
+            🧙‍♂️ AI魔法3D
+          </button>
         </div>
 
         <div className="w-full h-full">
-          {testMode === 'simple' && <SimpleVirtualSpaceViewer space={testSpace} />}
-          {testMode === '3d' && <VirtualSpaceViewer space={testSpace} />}
+          {testMode === 'basic' && <SimpleVirtualSpaceViewer space={testSpace} />}
           {testMode === 'advanced' && <AdvancedThreeScene space={testSpace} />}
+          {testMode === 'fantasy' && <FantasyScene space={{
+            ...testSpace,
+            description: "古い魔法学校の大広間。高いアーチ天井、石の柱、松明の温かい光が踊る神秘的な空間"
+          }} />}
         </div>
       </div>
     );
@@ -179,37 +183,57 @@ export const TestPage: React.FC = () => {
         <p className="text-green-700 mb-4">
           3つのモードで3D機能をテストできます：
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => {
-              setTestMode('simple');
-              setShowBasicTest(false);
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-lg font-medium transition-colors"
-          >
-            <div className="text-lg mb-2">📱 シンプルモード</div>
-            <div className="text-sm opacity-90">Three.jsなしの基本表示</div>
-          </button>
-          <button
-            onClick={() => {
-              setTestMode('3d');
-              setShowBasicTest(false);
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-medium transition-colors"
-          >
-            <div className="text-lg mb-2">🎮 基本3Dモード</div>
-            <div className="text-sm opacity-90">基本的な3D機能</div>
-          </button>
-          <button
-            onClick={() => {
-              setTestMode('advanced');
-              setShowBasicTest(false);
-            }}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-lg font-medium transition-colors"
-          >
-            <div className="text-lg mb-2">🚀 高度3Dモード</div>
-            <div className="text-sm opacity-90">最新の高度な3D機能</div>
-          </button>
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-lg font-medium mb-2">🎮 3Dテストモード</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <button
+                onClick={() => setTestMode('basic')}
+                className={`p-4 rounded-lg border text-center transition-colors ${testMode === 'basic'
+                  ? 'bg-blue-500 text-white border-blue-600'
+                  : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                  }`}
+              >
+                <div className="text-2xl mb-2">🎯</div>
+                <div className="font-medium">基本3D</div>
+                <div className="text-sm opacity-70">シンプルな3D空間</div>
+              </button>
+
+              <button
+                onClick={() => setTestMode('advanced')}
+                className={`p-4 rounded-lg border text-center transition-colors ${testMode === 'advanced'
+                  ? 'bg-purple-500 text-white border-purple-600'
+                  : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                  }`}
+              >
+                <div className="text-2xl mb-2">🚀</div>
+                <div className="font-medium">高度3D</div>
+                <div className="text-sm opacity-70">高度なエフェクト</div>
+              </button>
+
+              <button
+                onClick={() => setTestMode('fantasy')}
+                className={`p-4 rounded-lg border text-center transition-colors ${testMode === 'fantasy'
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-600'
+                  : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                  }`}
+              >
+                <div className="text-2xl mb-2">🧙‍♂️</div>
+                <div className="font-medium">AI魔法3D</div>
+                <div className="text-sm opacity-70">テキスト生成</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-green-200 rounded-lg">
+          <h3 className="font-semibold mb-2 text-green-800">🔍 3D問題の調査</h3>
+          <ul className="text-sm space-y-1 text-green-700">
+            <li>• コンソール（F12）でエラーメッセージを確認してください</li>
+            <li>• 「真っ白」になる場合は、3Dライブラリの読み込み問題の可能性</li>
+            <li>• スマホでは「シンプルモード」を試してください</li>
+            <li>• 問題があれば具体的なエラーメッセージを教えてください</li>
+          </ul>
         </div>
       </div>
 
@@ -273,6 +297,54 @@ export const TestPage: React.FC = () => {
         </div>
       </div>
 
+      <div className="bg-purple-100 p-4 rounded-lg mb-4">
+        <h2 className="text-xl font-bold text-purple-800 mb-2">🔐 認証機能テスト</h2>
+        <p className="text-purple-700 mb-4">
+          ユーザー登録とログイン機能をテストします：
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={async () => {
+              try {
+                console.log('🧪 Testing registration...');
+                const response = await fetch(`${apiUrl}/auth/register`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    email: `test${Date.now()}@example.com`,
+                    username: `user${Date.now()}`,
+                    displayName: 'テストユーザー',
+                    password: 'password123',
+                    userType: 'fan',
+                  }),
+                });
+                const data = await response.json();
+                console.log('🔐 Registration test result:', data);
+                alert(data.success ? '✅ 登録テスト成功!' : '❌ 登録テスト失敗: ' + data.message);
+              } catch (error) {
+                console.error('❌ Registration test error:', error);
+                alert('❌ 登録テストエラー: ' + error);
+              }
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-lg font-medium transition-colors"
+          >
+            <div className="text-lg mb-2">🔐 ユーザー登録テスト</div>
+            <div className="text-sm opacity-90">新しいユーザーで登録テスト</div>
+          </button>
+          <button
+            onClick={() => {
+              window.location.href = '/register';
+            }}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-lg font-medium transition-colors"
+          >
+            <div className="text-lg mb-2">📝 登録ページへ</div>
+            <div className="text-sm opacity-90">実際の登録フォーム</div>
+          </button>
+        </div>
+      </div>
+
       <div className="bg-yellow-100 p-4 rounded-lg">
         <h2 className="text-xl font-bold text-yellow-800 mb-2">🔧 アクセス方法</h2>
         <div className="text-yellow-700 space-y-2">
@@ -306,6 +378,66 @@ export const TestPage: React.FC = () => {
           <div>• 🎮 1人称視点がデフォルト（没入感重視）</div>
           <div>• 🌍 広大な3D空間を自由に探索してください！</div>
           <div>• 📱 スマホでも快適に操作できます！</div>
+        </div>
+      </div>
+
+      {/* 3D表示エリア */}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
+        <div className="h-full relative">
+          {(() => {
+            try {
+              switch (testMode) {
+                case 'basic':
+                  return (
+                    <SimpleVirtualSpaceViewer space={testSpace} />
+                  );
+                case 'advanced':
+                  return (
+                    <AdvancedThreeScene
+                      space={testSpace}
+                      onUserMove={(position) => {
+                        console.log('Advanced 3D - Player moved to:', position);
+                      }}
+                    />
+                  );
+                case 'fantasy':
+                  return (
+                    <FantasyScene
+                      space={{
+                        ...testSpace,
+                        description: "古い魔法学校の大広間。高いアーチ天井、石の柱、松明の温かい光が踊る神秘的な空間"
+                      }}
+                      onUserMove={(position) => {
+                        console.log('Fantasy AI 3D - Player moved to:', position);
+                      }}
+                    />
+                  );
+                default:
+                  return <div className="flex items-center justify-center h-full text-gray-500">3Dシーンを選択してください</div>;
+              }
+            } catch (error) {
+              console.error('3D Scene Error:', error);
+              return (
+                <div className="flex items-center justify-center h-full text-red-500">
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">❌</div>
+                    <div className="text-lg font-medium mb-2">3D表示エラー</div>
+                    <div className="text-sm">
+                      {testMode === 'fantasy' ? 'AI魔法3D機能で問題が発生しました' :
+                        testMode === 'advanced' ? '高度3D機能で問題が発生しました' :
+                          '基本3D機能で問題が発生しました'}
+                    </div>
+                    <button
+                      onClick={() => setTestMode('basic')}
+                      className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      基本3Dに戻る
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+          })()}
         </div>
       </div>
     </div>

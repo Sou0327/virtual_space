@@ -396,6 +396,11 @@ export const ThreeScene: React.FC<ThreeSceneProps> = ({ space, onUserMove }) => 
         )}
 
         <Suspense fallback={<LoadingSpinner />}>
+          {/* タッチインタラクション（Canvas外） */}
+          {isMobile && (
+            <TouchInteraction onObjectTouch={handleObjectTouch} />
+          )}
+
           <Canvas
             {...getCanvasSettings(isMobile)}
             camera={{
@@ -445,11 +450,6 @@ export const ThreeScene: React.FC<ThreeSceneProps> = ({ space, onUserMove }) => 
               virtualMoveInput={virtualMoveInput}
               virtualLookInput={virtualLookInput}
             />
-
-            {/* タッチインタラクション */}
-            {isMobile && (
-              <TouchInteraction onObjectTouch={handleObjectTouch} />
-            )}
 
             {/* 空間環境 */}
             <SpaceEnvironment template={space.template} isMobile={isMobile} />

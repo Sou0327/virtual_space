@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
-import * as THREE from 'three';
 
 interface TouchInteractionProps {
   onObjectTouch?: (object: any, position: { x: number; y: number }) => void;
@@ -14,56 +12,54 @@ interface ObjectInfo {
 }
 
 export const TouchInteraction: React.FC<TouchInteractionProps> = ({ onObjectTouch }) => {
-  const { camera, scene, gl } = useThree();
   const [selectedObject, setSelectedObject] = useState<ObjectInfo | null>(null);
   const [touchPosition, setTouchPosition] = useState({ x: 0, y: 0 });
-  const raycaster = useRef(new THREE.Raycaster());
-  const mouse = useRef(new THREE.Vector2());
 
-  const getObjectInfo = (object: THREE.Object3D): ObjectInfo | null => {
-    // オブジェクトの種類に応じて情報を返す
-    if (object.userData.type) {
+  const getObjectInfo = (touch: Touch): ObjectInfo => {
+    // タッチ位置に基づいて仮想的なオブジェクト情報を生成
+    const rect = document.querySelector('canvas')?.getBoundingClientRect();
+    if (!rect) {
       return {
-        name: object.userData.name || 'Unknown Object',
-        description: object.userData.description || 'No description available',
-        type: object.userData.type,
-        position: touchPosition
+        name: '3Dオブジェクト',
+        description: 'バーチャル空間内のオブジェクトです。',
+        type: 'unknown',
+        position: { x: touch.clientX, y: touch.clientY }
       };
     }
 
-    // デフォルトの情報を推測
-    if (object.type === 'Mesh') {
-      const mesh = object as THREE.Mesh;
-      if (mesh.geometry.type === 'SphereGeometry') {
-        return {
-          name: '球体オブジェクト',
-          description: '3D空間内の球体です。インタラクティブな要素かもしれません。',
-          type: 'sphere',
-          position: touchPosition
-        };
-      } else if (mesh.geometry.type === 'BoxGeometry') {
-        return {
-          name: '立方体オブジェクト',
-          description: '3D空間内の立方体です。建物や装飾品の可能性があります。',
-          type: 'box',
-          position: touchPosition
-        };
-      } else if (mesh.geometry.type === 'PlaneGeometry') {
-        return {
-          name: '平面',
-          description: '床や壁などの平面です。',
-          type: 'plane',
-          position: touchPosition
-        };
-      }
-    }
+    const relativeX = (touch.clientX - rect.left) / rect.width;
+    const relativeY = (touch.clientY - rect.top) / rect.height;
 
-    return {
-      name: object.name || '3Dオブジェクト',
-      description: `${object.type}タイプのオブジェクトです。`,
-      type: object.type.toLowerCase(),
-      position: touchPosition
-    };
+    // 画面位置に基づいてオブジェクトタイプを決定
+    if (relativeX < 0.3 && relativeY > 0.5) {
+      return {
+        name: 'バーチャルアバター',
+        description: '他のユーザーのアバターです。プロフィールを確認できます。',
+        type: 'avatar',
+        position: { x: touch.clientX, y: touch.clientY }
+      };
+    } else if (relativeX > 0.7 && relativeY > 0.5) {
+      return {
+        name: 'インタラクティブオブジェクト',
+        description: 'タッチして詳細情報を表示できます。',
+        type: 'interactive',
+        position: { x: touch.clientX, y: touch.clientY }
+      };
+    } else if (relativeY < 0.3) {
+      return {
+        name: '装飾オブジェクト',
+        description: '空間を彩る装飾品です。美しいデザインが特徴です。',
+        type: 'decoration',
+        position: { x: touch.clientX, y: touch.clientY }
+      };
+    } else {
+      return {
+        name: '環境オブジェクト',
+        description: '空間の環境を構成する要素です。',
+        type: 'environment',
+        position: { x: touch.clientX, y: touch.clientY }
+      };
+    }
   };
 
   const handleTouch = (event: TouchEvent) => {
@@ -71,45 +67,38 @@ export const TouchInteraction: React.FC<TouchInteractionProps> = ({ onObjectTouc
 
     if (event.touches.length === 1) {
       const touch = event.touches[0];
-      const rect = gl.domElement.getBoundingClientRect();
+      const canvas = document.querySelector('canvas');
 
-      // タッチ位置を正規化座標に変換
-      mouse.current.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.current.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+      if (canvas && canvas.contains(event.target as Node)) {
+        const objectInfo = getObjectInfo(touch);
+        setTouchPosition({
+          x: touch.clientX,
+          y: touch.clientY
+        });
+        setSelectedObject(objectInfo);
 
-      // レイキャスティング
-      raycaster.current.setFromCamera(mouse.current, camera);
-      const intersects = raycaster.current.intersectObjects(scene.children, true);
-
-      if (intersects.length > 0) {
-        const intersectedObject = intersects[0].object;
-        const objectInfo = getObjectInfo(intersectedObject);
-
-        if (objectInfo) {
-          setTouchPosition({
-            x: touch.clientX,
-            y: touch.clientY
-          });
-          setSelectedObject(objectInfo);
-
-          if (onObjectTouch) {
-            onObjectTouch(intersectedObject, { x: touch.clientX, y: touch.clientY });
-          }
+        if (onObjectTouch) {
+          onObjectTouch(objectInfo, { x: touch.clientX, y: touch.clientY });
         }
-      } else {
-        setSelectedObject(null);
+
+        // 3秒後に自動的に閉じる
+        setTimeout(() => {
+          setSelectedObject(null);
+        }, 3000);
       }
     }
   };
 
   useEffect(() => {
-    const canvas = gl.domElement;
-    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      canvas.addEventListener('touchstart', handleTouch, { passive: false });
 
-    return () => {
-      canvas.removeEventListener('touchstart', handleTouch);
-    };
-  }, [gl.domElement, camera, scene]);
+      return () => {
+        canvas.removeEventListener('touchstart', handleTouch);
+      };
+    }
+  }, []);
 
   return (
     <>
@@ -121,7 +110,7 @@ export const TouchInteraction: React.FC<TouchInteractionProps> = ({ onObjectTouc
             top: `${Math.max(selectedObject.position.y - 100, 10)}px`,
           }}
         >
-          <div className="bg-black bg-opacity-80 backdrop-blur-sm text-white p-4 rounded-lg shadow-lg max-w-xs">
+          <div className="bg-black bg-opacity-80 backdrop-blur-sm text-white p-4 rounded-lg shadow-lg max-w-xs transition-all duration-300 ease-out transform scale-100 opacity-100">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-bold text-lg">{selectedObject.name}</h3>
               <button
@@ -137,7 +126,7 @@ export const TouchInteraction: React.FC<TouchInteractionProps> = ({ onObjectTouc
                 {selectedObject.type}
               </span>
               <span className="text-xs text-gray-400">
-                タッチして詳細表示
+                タッチで詳細表示
               </span>
             </div>
           </div>

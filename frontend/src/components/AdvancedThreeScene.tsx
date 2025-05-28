@@ -92,26 +92,6 @@ const AdvancedLoadingSpinner: React.FC = () => (
   </div>
 );
 
-// Canvas設定の最適化
-const AdvancedCanvasSettings = {
-  shadows: true,
-  dpr: [1, 2] as [number, number],
-  performance: { min: 0.3 },
-  gl: {
-    antialias: true,
-    alpha: false,
-    powerPreference: 'high-performance' as const,
-    shadowMap: {
-      enabled: true,
-      type: THREE.PCFSoftShadowMap,
-    },
-  },
-  shadowMap: {
-    enabled: true,
-    type: THREE.PCFSoftShadowMap,
-  },
-};
-
 // 高度な環境システム
 const AdvancedEnvironment: React.FC<{ template: VirtualSpace['template'] }> = ({ template }) => {
   const [timeOfDay, setTimeOfDay] = useState<'dawn' | 'day' | 'dusk' | 'night'>('day');
@@ -679,8 +659,14 @@ export const AdvancedThreeScene: React.FC<AdvancedThreeSceneProps> = ({ space, o
         )}
 
         <Suspense fallback={<AdvancedLoadingSpinner />}>
+          {/* タッチインタラクション（Canvas外） */}
+          {isMobile && (
+            <TouchInteraction onObjectTouch={handleObjectTouch} />
+          )}
+
           <Canvas
-            {...AdvancedCanvasSettings}
+            shadows
+            dpr={isMobile ? [1, 1.5] : [1, 2]}
             camera={{
               position: [0, 8, 15],
               fov: viewMode === 'first-person' ? 75 : 60
@@ -692,15 +678,21 @@ export const AdvancedThreeScene: React.FC<AdvancedThreeSceneProps> = ({ space, o
             onError={(error) => {
               console.error('❌ Advanced Canvas error:', error);
             }}
+            gl={{
+              antialias: !isMobile,
+              alpha: false,
+              powerPreference: isMobile ? 'default' : 'high-performance',
+              precision: isMobile ? 'mediump' : 'highp',
+            }}
           >
             {/* 高度なライティング */}
             <ambientLight intensity={0.3} />
             <directionalLight
               position={[20, 20, 10]}
               intensity={1.5}
-              castShadow
-              shadow-mapSize-width={4096}
-              shadow-mapSize-height={4096}
+              castShadow={!isMobile}
+              shadow-mapSize-width={isMobile ? 1024 : 4096}
+              shadow-mapSize-height={isMobile ? 1024 : 4096}
               shadow-camera-far={100}
               shadow-camera-left={-50}
               shadow-camera-right={50}
@@ -719,11 +711,6 @@ export const AdvancedThreeScene: React.FC<AdvancedThreeSceneProps> = ({ space, o
               virtualMoveInput={virtualMoveInput}
               virtualLookInput={virtualLookInput}
             />
-
-            {/* タッチインタラクション */}
-            {isMobile && (
-              <TouchInteraction onObjectTouch={handleObjectTouch} />
-            )}
 
             {/* 高度な環境 */}
             <AdvancedEnvironment template={space.template} />
