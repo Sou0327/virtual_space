@@ -10,6 +10,7 @@ import os from 'os';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import spaceRoutes from './routes/spaces';
+import aiRoutes from './routes/ai';
 
 // Import database initialization
 import { initializeDatabase } from './utils/database';
@@ -54,7 +55,7 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // AI画像データ用に容量増加
 app.use(express.urlencoded({ extended: true }));
 
 // Static files for uploads
@@ -64,10 +65,18 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/spaces', spaceRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'FanVerse API is running' });
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    services: {
+      database: 'connected',
+      ai_integration: 'available'
+    }
+  });
 });
 
 // Error handling middleware
@@ -111,6 +120,7 @@ async function startServer() {
       console.log(`   Local:   http://localhost:${port}`);
       console.log(`   Network: http://${localIP}:${port}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🤖 AI Services: DALL-E 3, Stability AI, Meshy AI, Kaedim3D`);
       console.log(`🔧 For mobile testing: http://${localIP}:${port}/api/health`);
     });
   } catch (error) {

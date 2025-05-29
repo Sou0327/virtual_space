@@ -11,6 +11,105 @@ FanVerseは、インフルエンサーが自身のブランドや世界観を反
 - **インフルエンサー**: ペット、VTuber、美容、ゲーム実況、教育など幅広いジャンル
 - **ファン**: 応援するインフルエンサーの世界観に浸りたい人々
 
+## 🤖 AI統合機能 (NEW!)
+
+### 対応AIサービス
+
+1. **OpenAI DALL-E 3** - 高品質テクスチャ生成
+   - コスト: $0.040/画像
+   - 用途: 家具・材質のリアルなテクスチャ
+
+2. **Stability AI** - PBRマテリアル生成  
+   - コスト: $0.02/画像
+   - 用途: シームレステクスチャ、法線マップ
+
+3. **Meshy AI** - 3Dモデル生成
+   - コスト: $0.20/モデル
+   - 用途: テキストから3Dオブジェクト生成
+
+4. **Kaedim3D** - 画像から3D変換
+   - コスト: $1.00/モデル
+   - 用途: 写真・イラストから3Dモデル化
+
+### 🔧 AI機能セットアップ
+
+#### 1. APIキー取得
+
+**OpenAI DALL-E 3:**
+```bash
+# https://platform.openai.com/api-keys でAPIキー取得
+# 月額制限: $20/月（個人利用）
+```
+
+**Stability AI:**
+```bash
+# https://platform.stability.ai/ でAPIキー取得
+# クレジット制: $10で1000画像
+```
+
+**Meshy AI:**
+```bash
+# https://meshy.ai/ でAPIキー取得
+# 無料プラン: 月20回まで
+```
+
+**Kaedim3D:**
+```bash
+# https://www.kaedim3d.com/ でAPIキー取得
+# プロプラン: $50/月
+```
+
+#### 2. バックエンドセットアップ
+
+```bash
+cd backend
+npm install node-fetch @types/node-fetch
+npm run dev
+```
+
+#### 3. フロントエンドでのAI利用
+
+1. http://localhost:5174/test にアクセス
+2. 「🤖 AI強化」モードを選択
+3. 右パネルでAPIキーを設定
+4. プロンプトを入力して生成開始
+
+### 💡 効果的なプロンプト例
+
+**テクスチャ生成:**
+```
+"high-quality brown leather texture with natural grain patterns, realistic scratches and wear, photorealistic material for luxury furniture, 4K seamless texture"
+```
+
+**3Dモデル生成:**
+```
+"modern minimalist chair with wooden legs and fabric cushion, clean lines, scandinavian design, web-optimized 3D model"
+```
+
+### 🚀 AI統合のワークフロー
+
+```mermaid
+graph TD
+    A[プロンプト入力] --> B[AIサービス選択]
+    B --> C[API呼び出し]
+    C --> D[コンテンツ生成]
+    D --> E[Three.js統合]
+    E --> F[リアルタイム表示]
+    F --> G[品質向上完了]
+```
+
+### 📊 コスト最適化
+
+- **開発段階**: Stability AI推奨（低コスト）
+- **プロダクション**: DALL-E 3推奨（高品質）
+- **3Dモデル**: Meshy AI（バランス良好）
+
+### 🛡️ セキュリティ
+
+- APIキーはローカルストレージに保存
+- プロダクション環境では環境変数使用推奨
+- レート制限とエラーハンドリング実装済み
+
 ## 🛠️ 技術スタック
 
 ### フロントエンド
