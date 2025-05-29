@@ -8,6 +8,7 @@ import { React19TestPage } from './pages/React19TestPage';
 import { useAuthStore } from './stores/authStore';
 import { AIEnhanced3DShowroom } from './components/three/AIEnhancedShowroom';
 import { TextTo3DGenerator } from './components/three/TextTo3DGenerator';
+import { InfluencerRoomBuilder } from './components/three/InfluencerRoomBuilder';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -23,10 +24,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 type SceneType =
   | 'ai-enhanced'
   | 'text-to-3d'
-  | 'dashboard';
+  | 'dashboard'
+  | 'room-builder';
 
 const App: React.FC = () => {
   const [currentScene, setCurrentScene] = useState<SceneType>('text-to-3d');
+  const [showSceneMenu, setShowSceneMenu] = useState(false);
 
   const scenes = {
     'ai-enhanced': {
@@ -63,6 +66,11 @@ const App: React.FC = () => {
           </div>
         </Router>
       )
+    },
+    'room-builder': {
+      name: '🏠 ルームビルダー',
+      description: 'Influencer Room Builder',
+      component: <InfluencerRoomBuilder />
     }
   };
 
@@ -70,31 +78,52 @@ const App: React.FC = () => {
   if (currentScene !== 'dashboard') {
     return (
       <div className="w-full h-screen bg-gray-900 text-white relative">
-        {/* シーン選択メニュー */}
-        <div className="fixed top-4 left-4 z-50 bg-black bg-opacity-90 p-4 rounded-lg">
-          <h2 className="text-lg font-bold mb-3">🎬 FanVerse 3D Systems</h2>
-          <div className="space-y-2">
-            {Object.entries(scenes).map(([key, scene]) => (
-              <button
-                key={key}
-                onClick={() => setCurrentScene(key as SceneType)}
-                className={`w-full text-left px-3 py-2 rounded transition-all ${currentScene === key
-                  ? 'bg-blue-600 text-white font-bold'
-                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  }`}
-              >
-                <div className="font-medium">{scene.name}</div>
-                <div className="text-xs text-gray-400">{scene.description}</div>
-              </button>
-            ))}
-          </div>
+        {/* シーン切り替えボタン（小さなトリガー） */}
+        <div className="fixed top-4 left-4 z-50">
+          <button
+            onClick={() => setShowSceneMenu(!showSceneMenu)}
+            onMouseEnter={() => setShowSceneMenu(true)}
+            className="bg-black bg-opacity-80 hover:bg-opacity-100 text-white p-2 rounded-lg transition-all duration-200 shadow-lg border border-gray-600"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">🎬</span>
+              <span className="text-xs font-medium">切替</span>
+            </div>
+          </button>
 
-          {/* 現在のシーン情報 */}
-          <div className="mt-4 p-3 bg-gray-800 rounded">
-            <div className="text-sm font-medium text-blue-300">現在のシステム:</div>
-            <div className="text-lg font-bold">{scenes[currentScene].name}</div>
-            <div className="text-xs text-gray-400">{scenes[currentScene].description}</div>
-          </div>
+          {/* シーン選択メニュー（ホバー/クリック時のみ表示） */}
+          {showSceneMenu && (
+            <div
+              className="absolute top-12 left-0 bg-black bg-opacity-95 p-4 rounded-lg shadow-xl border border-gray-600 min-w-80"
+              onMouseLeave={() => setShowSceneMenu(false)}
+            >
+              <h2 className="text-sm font-bold mb-3 text-gray-300">🎬 FanVerse 3D Systems</h2>
+              <div className="space-y-2">
+                {Object.entries(scenes).map(([key, scene]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setCurrentScene(key as SceneType);
+                      setShowSceneMenu(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded transition-all text-sm ${currentScene === key
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                      }`}
+                  >
+                    <div className="font-medium">{scene.name}</div>
+                    <div className="text-xs text-gray-400">{scene.description}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* 現在のシーン情報 */}
+              <div className="mt-3 p-2 bg-gray-800 rounded">
+                <div className="text-xs font-medium text-blue-300">現在:</div>
+                <div className="text-sm font-bold">{scenes[currentScene].name}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 現在のシーンを表示 */}

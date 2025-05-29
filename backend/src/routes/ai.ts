@@ -446,10 +446,10 @@ router.post('/text-to-3d', async (req, res) => {
     const { 
       prompt, 
       art_style = 'realistic',
-      texture_resolution = 1024,
+      texture_resolution: originalTextureResolution = 1024,
       ai_model = 'meshy-4',
       topology = 'triangle',
-      target_polycount = 30000
+      target_polycount: originalTargetPolycount = 30000
     } = req.body;
 
     if (!prompt) {
@@ -461,6 +461,19 @@ router.post('/text-to-3d', async (req, res) => {
       try {
         console.log('🔥 Using REAL Meshy AI v2 for Text-to-3D...');
         
+        // プロンプト強化（大型構造物対応）
+        let enhancedPrompt = prompt;
+        let target_polycount = originalTargetPolycount;
+        let texture_resolution = originalTextureResolution;
+        
+        if (prompt.toLowerCase().includes('room') || prompt.toLowerCase().includes('building') || prompt.toLowerCase().includes('interior')) {
+          enhancedPrompt = `${prompt}, architectural interior design, spacious layout, detailed walls and floors, realistic lighting, high quality interior space`;
+          target_polycount = Math.max(target_polycount, 50000); // 大型構造物は高ポリゴン
+          texture_resolution = Math.max(texture_resolution, 2048); // 高解像度テクスチャ
+        }
+        
+        console.log('🏗️ Enhanced prompt for large structure:', enhancedPrompt);
+        
         // ステップ1: プレビュータスク作成（メッシュのみ）
         const previewResponse = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
           method: 'POST',
@@ -470,7 +483,7 @@ router.post('/text-to-3d', async (req, res) => {
           },
           body: JSON.stringify({
             mode: 'preview',
-            prompt: prompt,
+            prompt: enhancedPrompt,
             art_style: art_style,
             ai_model: ai_model,
             topology: topology,
@@ -514,6 +527,12 @@ router.post('/text-to-3d', async (req, res) => {
                 // ステップ2: リファインタスク作成（テクスチャ適用）
                 console.log('🎨 Creating refine task for texturing...');
                 
+                // Meshy AI v2の制限：PBR有効化にはmeshy-4が必要
+                const enablePBR = ai_model === 'meshy-4';
+                if (ai_model === 'meshy-5' && enablePBR) {
+                  console.log('⚠️ meshy-5 detected: disabling PBR due to API limitation, using high-quality settings instead');
+                }
+                
                 const refineResponse = await fetch('https://api.meshy.ai/openapi/v2/text-to-3d', {
                   method: 'POST',
                   headers: {
@@ -523,8 +542,10 @@ router.post('/text-to-3d', async (req, res) => {
                   body: JSON.stringify({
                     mode: 'refine',
                     preview_task_id: previewTaskId,
-                    enable_pbr: true,
-                    texture_prompt: prompt, // 同じプロンプトでテクスチャリング
+                    enable_pbr: enablePBR,
+                    texture_prompt: ai_model === 'meshy-5' 
+                      ? `${prompt}, high quality textures, detailed surface materials, professional lighting`
+                      : prompt,
                     moderation: false
                   })
                 });
@@ -563,20 +584,24 @@ router.post('/text-to-3d', async (req, res) => {
                           format: 'glb',
                           total_processing_time: `${(attempts + refineAttempts + 2) * 6}s`,
                           texture_resolution: texture_resolution,
+                          ai_model_used: ai_model,
+                          pbr_enabled: enablePBR,
+                          quality_mode: ai_model === 'meshy-5' ? 'high_quality' : 'standard',
                           steps: [
                             { 
                               step: 1, 
                               name: 'Meshy AI Preview (Mesh)', 
                               time: `${(attempts + 1) * 6}s`, 
                               status: 'completed_real',
-                              api_used: 'Meshy AI v2'
+                              api_used: `Meshy AI v2 (${ai_model})`
                             },
                             { 
                               step: 2, 
-                              name: 'Meshy AI Refine (Texture)', 
+                              name: `Meshy AI Refine (${enablePBR ? 'PBR' : 'Standard'} Texture)`, 
                               time: `${(refineAttempts + 1) * 8}s`, 
                               status: 'completed_real',
-                              api_used: 'Meshy AI v2'
+                              api_used: `Meshy AI v2 (${ai_model})`,
+                              note: enablePBR ? 'PBR材質適用' : ai_model === 'meshy-5' ? '高品質テクスチャ適用' : '標準テクスチャ適用'
                             }
                           ],
                           status: 'success_real_3d',
@@ -586,7 +611,8 @@ router.post('/text-to-3d', async (req, res) => {
                             model_generation: 'real',
                             real_apis_available: true,
                             preview_task_id: previewTaskId,
-                            refine_task_id: refineTaskId
+                            refine_task_id: refineTaskId,
+                            pbr_limitation: !enablePBR && ai_model === 'meshy-5' ? 'PBR無効: meshy-5はPBR非対応、代わりに高品質設定使用' : null
                           }
                         };
 
@@ -614,9 +640,10 @@ router.post('/text-to-3d', async (req, res) => {
                             }
                           } catch (downloadError) {
                             console.error('❌ Meshy AI GLB download failed:', downloadError);
-                            // ダウンロード失敗時は高品質フォールバックを使用
-                            result.model_url = 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf';
+                            // ダウンロード失敗時はMeshyAI URLをそのまま使用
+                            console.log('⚠️ Using original Meshy AI URL due to download failure');
                             (result as any).api_info.download_failed = true;
+                            (result as any).api_info.cors_warning = 'フロントエンドでCORS制限によりフォールバック表示される可能性があります';
                           }
                         }
                         
@@ -661,20 +688,23 @@ router.post('/text-to-3d', async (req, res) => {
     
     await new Promise(resolve => setTimeout(resolve, 3000)); // リアルなタイミング
     
-    // プロンプトに応じた高品質GLTFモデル選択
-    let modelUrl = 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf';
-    let previewImage = 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.jpg';
+    // プロンプトに応じた高品質GLTFモデル選択（すべて有効なURL）
+    let modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf';
+    let previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/screenshot/screenshot.png';
     
     if (prompt.toLowerCase().includes('chair') || prompt.toLowerCase().includes('椅子')) {
       // 椅子の高品質GLTFモデル
-      modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf';
-      previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/screenshot/screenshot.png';
+      modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF/Avocado.gltf';
+      previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/screenshot/screenshot.png';
     } else if (prompt.toLowerCase().includes('helmet') || prompt.toLowerCase().includes('ヘルメット')) {
-      modelUrl = 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf';
-      previewImage = 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.jpg';
+      modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/FlightHelmet/glTF/FlightHelmet.gltf';
+      previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/FlightHelmet/screenshot/screenshot.png';
     } else if (prompt.toLowerCase().includes('lantern') || prompt.toLowerCase().includes('ランタン')) {
       modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/glTF/Lantern.gltf';
       previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/screenshot/screenshot.png';
+    } else if (prompt.toLowerCase().includes('robot') || prompt.toLowerCase().includes('ロボ')) {
+      modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedFigure/glTF/RiggedFigure.gltf';
+      previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedFigure/screenshot/screenshot.png';
     } else if (prompt.toLowerCase().includes('car') || prompt.toLowerCase().includes('車')) {
       modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Corset/glTF/Corset.gltf';
       previewImage = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Corset/screenshot/screenshot.png';
@@ -686,7 +716,7 @@ router.post('/text-to-3d', async (req, res) => {
       preview_image: previewImage,
       format: 'gltf',
       total_processing_time: '3s',
-      texture_resolution: texture_resolution,
+      texture_resolution: originalTextureResolution,
       steps: [
         { 
           step: 1, 
@@ -715,8 +745,8 @@ router.post('/text-to-3d', async (req, res) => {
     // 完全なエラー時のフォールバック
     const fallbackResult = {
       prompt: req.body.prompt || 'Unknown',
-      model_url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf',
-      preview_image: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.jpg',
+      model_url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf',
+      preview_image: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/screenshot/screenshot.png',
       format: 'gltf',
       status: 'error_fallback',
       error: error instanceof Error ? error.message : 'Unknown error'
