@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLBLoader } from './GLBLoader';
+import { isMobile } from '../../utils/deviceDetection';
 
 // 型定義
 interface RoomConfig {
@@ -22,33 +23,41 @@ interface RoomConfig {
   }>;
 }
 
-interface GeneratedObjectProps {
-  object: any;
-  isSelected: boolean;
-  onSelect: () => void;
-  onTransform: (position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
-  isPointerLocked: boolean;
-  editMode: 'translate' | 'rotate' | 'scale';
-  snapToGrid: boolean;
-  gridSize: number;
-  onHover?: (objectId: string | null) => void;
-  onDoubleClick?: (objectId: string) => void;
-  onRightClick?: (objectId: string, x: number, y: number) => void;
-  onQuickAction?: (action: string, objectId: string) => void;
-  isHovered?: boolean;
-  showQuickActions?: boolean;
-}
-
 interface RoomEnvironmentProps {
   config: RoomConfig;
   selectedObjectId: string | null;
-  onObjectSelect: (id: string | null) => void;
-  onObjectTransform: (id: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
+  onObjectSelect?: (objectId: string | null) => void;
+  onObjectTransform?: (
+    id: string,
+    position: [number, number, number],
+    rotation: [number, number, number],
+    scale: [number, number, number]
+  ) => void;
   isPointerLocked: boolean;
-  editMode: 'translate' | 'rotate' | 'scale';
+  editMode?: 'translate' | 'rotate' | 'scale';
   showGrid?: boolean;
-  gridSize?: number;
-  onFloorClick?: (position: [number, number, number]) => void;
+}
+
+interface GeneratedObjectProps {
+  object: {
+    id: string;
+    type: string;
+    name: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    modelUrl?: string;
+    generated?: boolean;
+  };
+  isSelected: boolean;
+  onSelect?: (objectId: string | null) => void;
+  onTransform?: (
+    id: string,
+    position: [number, number, number],
+    rotation: [number, number, number],
+    scale: [number, number, number]
+  ) => void;
+  isPointerLocked: boolean;
 }
 
 // GridHelperコンポーネント
@@ -70,147 +79,48 @@ const GridHelper: React.FC = () => {
   );
 };
 
-// GeneratedObjectコンポーネント
-export const GeneratedObject: React.FC<GeneratedObjectProps> = ({
+// 個別オブジェクトコンポーネント
+const GeneratedObject: React.FC<GeneratedObjectProps> = ({
   object,
   isSelected,
   onSelect,
   onTransform,
-  isPointerLocked,
-  editMode,
-  snapToGrid,
-  gridSize,
-  onHover,
-  onDoubleClick,
-  onRightClick,
-  onQuickAction,
-  isHovered = false,
-  showQuickActions = true
+  isPointerLocked
 }) => {
   const meshRef = useRef<THREE.Group>(null);
 
-  const handleDragStart = () => {
-    onHover?.(object.id);
-  };
-
-  const handleDragEnd = () => {
-    onHover?.(null);
-  };
-
-  const handleChange = () => {
-    if (meshRef.current) {
-      const position = meshRef.current.position.toArray() as [number, number, number];
-      const rotation = meshRef.current.rotation.toArray().slice(0, 3) as [number, number, number];
-      const scale = meshRef.current.scale.toArray() as [number, number, number];
-      onTransform(position, rotation, scale);
+  // オブジェクトがクリックされた時の処理
+  const handleClick = (e: any) => {
+    e.stopPropagation();
+    if (!isPointerLocked && onSelect) {
+      onSelect(object.id);
     }
   };
 
-  const renderObject = () => {
-    console.log('🔍 Object render check:', object);
+  // Transform更新時の処理
+  useFrame(() => {
+    if (meshRef.current && onTransform) {
+      const mesh = meshRef.current;
+      const currentPos: [number, number, number] = [mesh.position.x, mesh.position.y, mesh.position.z];
+      const currentRot: [number, number, number] = [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z];
+      const currentScale: [number, number, number] = [mesh.scale.x, mesh.scale.y, mesh.scale.z];
 
-    if (object.modelUrl) {
-      console.log('🌐 Using external model URL:', object.modelUrl);
-      return <GLBLoader url={object.modelUrl} />;
+      // 位置・回転・スケールが変わった場合のみ更新
+      if (
+        Math.abs(currentPos[0] - object.position[0]) > 0.001 ||
+        Math.abs(currentPos[1] - object.position[1]) > 0.001 ||
+        Math.abs(currentPos[2] - object.position[2]) > 0.001 ||
+        Math.abs(currentRot[0] - object.rotation[0]) > 0.001 ||
+        Math.abs(currentRot[1] - object.rotation[1]) > 0.001 ||
+        Math.abs(currentRot[2] - object.rotation[2]) > 0.001 ||
+        Math.abs(currentScale[0] - object.scale[0]) > 0.001 ||
+        Math.abs(currentScale[1] - object.scale[1]) > 0.001 ||
+        Math.abs(currentScale[2] - object.scale[2]) > 0.001
+      ) {
+        onTransform(object.id, currentPos, currentRot, currentScale);
+      }
     }
-
-    // デフォルトメッシュ
-    console.log('🔧 Rendering mock object for:', object.name, object.type);
-
-    switch (object.type) {
-      case 'chair':
-        return (
-          <group>
-            {/* 座面 */}
-            <mesh position={[0, 0.25, 0]}>
-              <boxGeometry args={[0.4, 0.05, 0.4]} />
-              <meshStandardMaterial color="#8B4513" />
-            </mesh>
-            {/* 背もたれ */}
-            <mesh position={[0, 0.5, -0.175]}>
-              <boxGeometry args={[0.4, 0.5, 0.05]} />
-              <meshStandardMaterial color="#8B4513" />
-            </mesh>
-            {/* 脚 */}
-            {[-0.15, 0.15].map((x, i) =>
-              [-0.15, 0.15].map((z, j) => (
-                <mesh key={`${i}-${j}`} position={[x, 0.125, z]}>
-                  <cylinderGeometry args={[0.02, 0.02, 0.25]} />
-                  <meshStandardMaterial color="#654321" />
-                </mesh>
-              ))
-            )}
-          </group>
-        );
-
-      case 'table':
-        return (
-          <group>
-            {/* 天板 */}
-            <mesh position={[0, 0.4, 0]}>
-              <boxGeometry args={[1.2, 0.05, 0.8]} />
-              <meshStandardMaterial color="#DEB887" />
-            </mesh>
-            {/* 脚 */}
-            {[-0.5, 0.5].map((x, i) =>
-              [-0.3, 0.3].map((z, j) => (
-                <mesh key={`${i}-${j}`} position={[x, 0.2, z]}>
-                  <cylinderGeometry args={[0.03, 0.03, 0.4]} />
-                  <meshStandardMaterial color="#8B7355" />
-                </mesh>
-              ))
-            )}
-          </group>
-        );
-
-      case 'lamp':
-        return (
-          <group>
-            {/* ベース */}
-            <mesh position={[0, 0.05, 0]}>
-              <cylinderGeometry args={[0.1, 0.1, 0.1]} />
-              <meshStandardMaterial color="#2F4F4F" />
-            </mesh>
-            {/* ポール */}
-            <mesh position={[0, 0.75, 0]}>
-              <cylinderGeometry args={[0.02, 0.02, 1.4]} />
-              <meshStandardMaterial color="#2F4F4F" />
-            </mesh>
-            {/* シェード */}
-            <mesh position={[0, 1.3, 0]}>
-              <coneGeometry args={[0.25, 0.3]} />
-              <meshStandardMaterial color="#F5F5DC" />
-            </mesh>
-          </group>
-        );
-
-      case 'bookshelf':
-        return (
-          <group>
-            {/* メインフレーム */}
-            <mesh position={[0, 1, 0]}>
-              <boxGeometry args={[0.8, 2, 0.3]} />
-              <meshStandardMaterial color="#8B4513" />
-            </mesh>
-            {/* 棚板 */}
-            {[0.3, 0.9, 1.5].map((y, i) => (
-              <mesh key={i} position={[0, y, 0]}>
-                <boxGeometry args={[0.75, 0.03, 0.25]} />
-                <meshStandardMaterial color="#DEB887" />
-              </mesh>
-            ))}
-          </group>
-        );
-
-      default:
-        return (
-          <mesh>
-            <boxGeometry args={[0.5, 0.5, 0.5]} />
-            <meshStandardMaterial color="#4A90E2" />
-          </mesh>
-        );
-    }
-  };
+  });
 
   return (
     <group
@@ -218,25 +128,27 @@ export const GeneratedObject: React.FC<GeneratedObjectProps> = ({
       position={object.position}
       rotation={object.rotation}
       scale={object.scale}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect();
-      }}
-      onPointerEnter={() => onHover?.(object.id)}
-      onPointerLeave={() => onHover?.(null)}
+      onClick={handleClick}
     >
-      {renderObject()}
+      {/* オブジェクトの描画 */}
+      {object.modelUrl ? (
+        <GLBLoader url={object.modelUrl} />
+      ) : (
+        // デフォルトキューブ
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshLambertMaterial
+            color={isSelected ? '#4F46E5' : object.generated ? '#10B981' : '#6B7280'}
+          />
+        </mesh>
+      )}
 
-      {isSelected && !isPointerLocked && (
-        <TransformControls
-          mode={editMode}
-          onMouseDown={handleDragStart}
-          onMouseUp={handleDragEnd}
-          onChange={handleChange}
-          showX showY showZ
-          size={0.8}
-          space="world"
-        />
+      {/* 選択インジケーター */}
+      {isSelected && (
+        <mesh position={[0, 0.6, 0]}>
+          <sphereGeometry args={[0.05]} />
+          <meshBasicMaterial color="#4F46E5" />
+        </mesh>
       )}
     </group>
   );
@@ -249,11 +161,25 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
   onObjectSelect,
   onObjectTransform,
   isPointerLocked,
-  editMode,
-  showGrid = false,
-  gridSize = 0.5,
-  onFloorClick
+  editMode = 'translate',
+  showGrid = false
 }) => {
+  const transformControlsRef = useRef<any>(null);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const selectedObjectRef = useRef<THREE.Group>(null);
+
+  // デバイス検出
+  useEffect(() => {
+    setIsMobileDevice(isMobile());
+  }, []);
+
+  // 選択されたオブジェクトのrefを更新
+  useEffect(() => {
+    if (transformControlsRef.current && selectedObjectRef.current) {
+      transformControlsRef.current.attach(selectedObjectRef.current);
+    }
+  }, [selectedObjectId]);
+
   return (
     <>
       {/* 環境光 */}
@@ -265,12 +191,10 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
         onClick={(e) => {
-          if (onFloorClick) {
-            const point = e.point;
-            console.log('🏠 Floor clicked - deselecting objects only (no object creation)');
-            onFloorClick([point.x, point.y + 0.5, point.z]);
+          e.stopPropagation();
+          if (!isPointerLocked) {
+            onObjectSelect?.(null);
           }
-          onObjectSelect(null);
         }}
         receiveShadow
       >
@@ -278,6 +202,7 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
         <meshStandardMaterial
           color={config.floorMaterial === 'wood' ? '#DEB887' : '#D3D3D3'}
           roughness={0.8}
+          metalness={0.1}
         />
       </mesh>
 
@@ -318,16 +243,45 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
           key={object.id}
           object={object}
           isSelected={selectedObjectId === object.id}
-          onSelect={() => onObjectSelect(object.id)}
-          onTransform={(position, rotation, scale) =>
-            onObjectTransform(object.id, position, rotation, scale)
-          }
+          onSelect={onObjectSelect}
+          onTransform={onObjectTransform}
           isPointerLocked={isPointerLocked}
-          editMode={editMode}
-          snapToGrid={false}
-          gridSize={gridSize}
         />
       ))}
+
+      {/* Transform Controls - モバイル対応 */}
+      {selectedObjectId && (
+        <TransformControls
+          ref={transformControlsRef}
+          mode={editMode}
+          enabled={!isPointerLocked}
+          showX={true}
+          showY={true}
+          showZ={true}
+          // モバイル用の設定
+          size={isMobileDevice ? 1.2 : 1.0}
+          space="world"
+          // タッチデバイスではスナップを有効化
+          rotationSnap={isMobileDevice ? Math.PI / 8 : undefined}
+          translationSnap={isMobileDevice ? 0.5 : undefined}
+          scaleSnap={isMobileDevice ? 0.1 : undefined}
+          onChange={(e: any) => {
+            if (e && e.target && e.target.object) {
+              const target = e.target.object;
+              const selectedObject = config.objects.find(obj => obj.id === selectedObjectId);
+
+              if (selectedObject && onObjectTransform) {
+                onObjectTransform(
+                  selectedObjectId,
+                  [target.position.x, target.position.y, target.position.z],
+                  [target.rotation.x, target.rotation.y, target.rotation.z],
+                  [target.scale.x, target.scale.y, target.scale.z]
+                );
+              }
+            }
+          }}
+        />
+      )}
     </>
   );
 };

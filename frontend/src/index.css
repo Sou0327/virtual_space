@@ -47,3 +47,149 @@
     transform: translateY(0);
   }
 }
+
+/* モバイル対応のアニメーション */
+@keyframes slide-in-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-bottom-5 {
+  animation: slide-in-from-bottom 0.3s ease-out;
+}
+
+.fade-in-scale {
+  animation: fade-in-scale 0.2s ease-out;
+}
+
+/* タッチフレンドリーなボタンスタイル */
+@layer components {
+  .touch-button {
+    @apply min-h-[44px] min-w-[44px] touch-manipulation;
+  }
+  
+  .mobile-panel {
+    @apply backdrop-blur-md bg-gray-900/95 rounded-t-xl border-t border-white/20;
+  }
+  
+  .mobile-sheet-handle {
+    @apply w-12 h-1 bg-gray-500 rounded-full;
+  }
+}
+
+/* モバイル用ユーティリティ */
+@layer utilities {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+  
+  .tap-highlight-none {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* モバイルでの選択を無効化 */
+  .select-none-mobile {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+  
+  /* 長押し防止 */
+  .no-context-menu {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+}
+
+/* レスポンシブフォントサイズ */
+@media (max-width: 768px) {
+  .text-responsive-sm {
+    font-size: 0.875rem; /* 14px */
+  }
+  
+  .text-responsive-base {
+    font-size: 1rem; /* 16px */
+  }
+  
+  .text-responsive-lg {
+    font-size: 1.125rem; /* 18px */
+  }
+}
+
+/* モバイル向けのカスタムスクロールバー */
+@media (max-width: 768px) {
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4B5563 transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4B5563;
+    border-radius: 2px;
+  }
+}
+
+/* モバイル用のボタンホバー効果無効化 */
+@media (hover: none) and (pointer: coarse) {
+  .mobile-no-hover:hover {
+    background-color: initial;
+    color: initial;
+    transform: initial;
+  }
+}
+
+/* セーフエリア対応 */
+@supports (padding: max(0px)) {
+  .safe-area-inset-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-area-inset-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-area-inset-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .safe-area-inset-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}

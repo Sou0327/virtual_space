@@ -1,29 +1,154 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { isMobile } from '../../utils/deviceDetection';
 
 interface CameraControlsProps {
   viewMode: 'creator' | 'visitor';
   disabled?: boolean;
+  onPointerLockChange?: (isLocked: boolean) => void;
 }
 
-const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = false }) => {
-  const { camera, gl } = useThree();
-  const controlsRef = useRef<any>();
+const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = false, onPointerLockChange }) => {
+  const { camera } = useThree();
+  const orbitControlsRef = useRef<any>();
+  const pointerLockControlsRef = useRef<any>();
+  const [isLocked, setIsLocked] = useState(false);
+  const [deviceIsMobile, setDeviceIsMobile] = useState(false);
+
+  // 移動関連の状態
+  const moveState = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    run: false
+  });
+
+  const velocity = useRef(new THREE.Vector3());
+
+  // デバイス検出
+  useEffect(() => {
+    setDeviceIsMobile(isMobile());
+  }, []);
 
   useEffect(() => {
     // 視点モードに応じてカメラ位置を設定
     if (viewMode === 'creator') {
       camera.position.set(0, 8, 8); // 俯瞰視点
+      if (orbitControlsRef.current) {
+        orbitControlsRef.current.target.set(0, 0, 0);
+        orbitControlsRef.current.update();
+      }
     } else {
-      camera.position.set(0, 1.6, 5); // 人間視点
+      camera.position.set(0, 1.6, 5); // 人間の目の高さ
+      camera.lookAt(0, 1.6, 0); // 正面を向く
     }
   }, [camera, viewMode]);
 
-  // キーボード移動を完全に直線的に（フレーム毎の処理で滑らか）
+  // PointerLock用のキーイベント処理（デスクトップのみ）
   useEffect(() => {
-    if (disabled) return;
+    if (viewMode !== 'visitor' || disabled || deviceIsMobile) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      switch (event.code) {
+        case 'KeyW':
+          moveState.current.forward = true;
+          break;
+        case 'KeyS':
+          moveState.current.backward = true;
+          break;
+        case 'KeyA':
+          moveState.current.left = true;
+          break;
+        case 'KeyD':
+          moveState.current.right = true;
+          break;
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          moveState.current.run = true;
+          break;
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      switch (event.code) {
+        case 'KeyW':
+          moveState.current.forward = false;
+          break;
+        case 'KeyS':
+          moveState.current.backward = false;
+          break;
+        case 'KeyA':
+          moveState.current.left = false;
+          break;
+        case 'KeyD':
+          moveState.current.right = false;
+          break;
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          moveState.current.run = false;
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [viewMode, disabled, deviceIsMobile]);
+
+  // ビジター歩行フレーム処理（デスクトップのみ）
+  useFrame((_, delta) => {
+    if (viewMode !== 'visitor' || disabled || !isLocked || deviceIsMobile) return;
+
+    const direction = new THREE.Vector3();
+    const right = new THREE.Vector3();
+
+    // カメラの向きベクトルを取得
+    camera.getWorldDirection(direction);
+    direction.y = 0; // Y軸を無効にして水平移動のみ
+    direction.normalize();
+
+    right.crossVectors(camera.up, direction).normalize();
+
+    // 移動速度（走る時は2倍）
+    const moveSpeed = moveState.current.run ? 6.0 : 3.0;
+
+    // 入力に基づいて速度を計算
+    const inputVector = new THREE.Vector3();
+
+    if (moveState.current.forward) inputVector.add(direction);
+    if (moveState.current.backward) inputVector.sub(direction);
+    if (moveState.current.left) inputVector.add(right);
+    if (moveState.current.right) inputVector.sub(right);
+
+    if (inputVector.length() > 0) {
+      inputVector.normalize();
+      velocity.current.copy(inputVector.multiplyScalar(moveSpeed));
+    } else {
+      // 摩擦で減速
+      velocity.current.multiplyScalar(0.9);
+    }
+
+    // カメラ位置を更新
+    camera.position.addScaledVector(velocity.current, delta);
+
+    // 床の高さ制限（1.6mの高さを維持）
+    camera.position.y = 1.6;
+
+    // 部屋の境界制限
+    camera.position.x = Math.max(-9, Math.min(9, camera.position.x));
+    camera.position.z = Math.max(-9, Math.min(9, camera.position.z));
+  });
+
+  // クリエイター用キーボード移動（デスクトップのみ）
+  useEffect(() => {
+    if (viewMode !== 'creator' || disabled || deviceIsMobile) return;
 
     const keys = {
       w: false, a: false, s: false, d: false,
@@ -32,7 +157,7 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       arrowLeft: false, arrowRight: false
     };
 
-    const moveSpeed = 0.08; // 移動スピードを大幅に下げて細かい制御を可能に
+    const moveSpeed = 0.08;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       switch (event.code) {
@@ -73,63 +198,31 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // フレーム毎の滑らかな移動処理
-    const moveCamera = () => {
-      if (!controlsRef.current) return;
+    let animationId: number;
+    const animate = () => {
+      if (!orbitControlsRef.current) return;
 
-      const controls = controlsRef.current;
+      const controls = orbitControlsRef.current;
       const direction = new THREE.Vector3();
       const right = new THREE.Vector3();
 
-      // カメラの向きベクトルを取得
       camera.getWorldDirection(direction);
       right.crossVectors(camera.up, direction).normalize();
 
       const currentSpeed = keys.shift ? moveSpeed * 2 : moveSpeed;
 
-      // WASD移動（完全直線・瞬間的）
-      if (keys.w) {
-        controls.object.position.addScaledVector(direction, currentSpeed);
-      }
-      if (keys.s) {
-        controls.object.position.addScaledVector(direction, -currentSpeed);
-      }
-      if (keys.a) {
-        controls.object.position.addScaledVector(right, currentSpeed);
-      }
-      if (keys.d) {
-        controls.object.position.addScaledVector(right, -currentSpeed);
-      }
-
-      // QE上下移動
-      if (keys.q) {
-        controls.object.position.y += currentSpeed;
-      }
-      if (keys.f) {
-        controls.object.position.y -= currentSpeed;
-      }
-
-      // 十字キー並行移動（完全直線・瞬間的）
-      if (keys.arrowUp) {
-        controls.object.position.addScaledVector(direction, currentSpeed);
-      }
-      if (keys.arrowDown) {
-        controls.object.position.addScaledVector(direction, -currentSpeed);
-      }
-      if (keys.arrowLeft) {
-        controls.object.position.addScaledVector(right, currentSpeed);
-      }
-      if (keys.arrowRight) {
-        controls.object.position.addScaledVector(right, -currentSpeed);
-      }
+      if (keys.w) controls.object.position.addScaledVector(direction, currentSpeed);
+      if (keys.s) controls.object.position.addScaledVector(direction, -currentSpeed);
+      if (keys.a) controls.object.position.addScaledVector(right, currentSpeed);
+      if (keys.d) controls.object.position.addScaledVector(right, -currentSpeed);
+      if (keys.q) controls.object.position.y += currentSpeed;
+      if (keys.f) controls.object.position.y -= currentSpeed;
+      if (keys.arrowUp) controls.object.position.addScaledVector(direction, currentSpeed);
+      if (keys.arrowDown) controls.object.position.addScaledVector(direction, -currentSpeed);
+      if (keys.arrowLeft) controls.object.position.addScaledVector(right, currentSpeed);
+      if (keys.arrowRight) controls.object.position.addScaledVector(right, -currentSpeed);
 
       controls.update();
-    };
-
-    // useFrameは使わず、requestAnimationFrameで直接制御
-    let animationId: number;
-    const animate = () => {
-      moveCamera();
       animationId = requestAnimationFrame(animate);
     };
     animate();
@@ -139,16 +232,61 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animationId);
     };
-  }, [camera, disabled]);
+  }, [camera, disabled, viewMode, deviceIsMobile]);
 
+  // ビジターモード：デスクトップではPointerLock、モバイルではOrbitControls
+  if (viewMode === 'visitor') {
+    if (deviceIsMobile) {
+      // モバイル：OrbitControlsでタッチ操作
+      return (
+        <OrbitControls
+          ref={orbitControlsRef}
+          enableDamping={true}
+          dampingFactor={0.05}
+          panSpeed={2.0}
+          rotateSpeed={1.0}
+          zoomSpeed={1.5}
+          minDistance={0.5}
+          maxDistance={15}
+          maxPolarAngle={Math.PI * 0.85}
+          enablePan={true}
+          enableRotate={true}
+          enableZoom={true}
+          target={[0, 1.6, 0]}
+          // タッチ専用設定
+          touches={{
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN
+          }}
+        />
+      );
+    } else {
+      // デスクトップ：PointerLockControls
+      return (
+        <PointerLockControls
+          ref={pointerLockControlsRef}
+          onLock={() => {
+            setIsLocked(true);
+            onPointerLockChange?.(true);
+          }}
+          onUnlock={() => {
+            setIsLocked(false);
+            onPointerLockChange?.(false);
+          }}
+        />
+      );
+    }
+  }
+
+  // クリエイターモード：OrbitControls（全デバイス共通、モバイル最適化）
   return (
     <OrbitControls
-      ref={controlsRef}
-      enableDamping={true} // ダンピングを有効にして滑らかな動きに
-      dampingFactor={0.1} // ダンピングを軽めに設定
-      panSpeed={1.0}  // パン速度を下げる
-      rotateSpeed={0.8} // 回転速度を下げる
-      zoomSpeed={1.0}   // ズーム速度を適度に
+      ref={orbitControlsRef}
+      enableDamping={true}
+      dampingFactor={deviceIsMobile ? 0.05 : 0.1}
+      panSpeed={deviceIsMobile ? 2.0 : 1.0}
+      rotateSpeed={deviceIsMobile ? 1.2 : 0.8}
+      zoomSpeed={deviceIsMobile ? 1.5 : 1.0}
       minDistance={1}
       maxDistance={50}
       maxPolarAngle={Math.PI * 0.9}
@@ -156,6 +294,11 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       enableRotate={true}
       enableZoom={true}
       target={[0, 0, 0]}
+      // タッチデバイス用設定
+      touches={deviceIsMobile ? {
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: THREE.TOUCH.DOLLY_PAN
+      } : undefined}
     />
   );
 };
