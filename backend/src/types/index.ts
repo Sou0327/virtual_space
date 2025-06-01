@@ -34,7 +34,7 @@ export interface VirtualSpace {
 export interface SpaceTemplate {
   id: string;
   name: string;
-  type: 'room' | 'stage' | 'gallery' | 'outdoor' | 'futuristic' | 'social';
+  type: 'room' | 'stage' | 'gallery' | 'outdoor' | 'futuristic' | 'social' | 'custom';
   description?: string;
   preview: string;
   features?: string[];

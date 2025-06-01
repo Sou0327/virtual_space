@@ -18,6 +18,13 @@ import { initializeDatabase } from './utils/database';
 // Load environment variables
 dotenv.config();
 
+console.log('🔧 Environment Configuration:', {
+  NODE_ENV: process.env.NODE_ENV || 'not-set',
+  PORT: process.env.PORT || 'using-default-3001',
+  isDevelopment: process.env.NODE_ENV === 'development',
+  corsMode: process.env.NODE_ENV === 'development' ? 'permissive' : 'restricted'
+});
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -33,24 +40,32 @@ app.use(helmet());
 app.use(limiter);
 app.use(cors({
   origin: (origin, callback) => {
-    // 開発環境では全てのオリジンを許可
-    if (process.env.NODE_ENV === 'development' || !origin) {
-      return callback(null, true);
-    }
+    console.log('🌐 CORS Request from origin:', origin || 'no-origin');
     
-    // 本番環境では特定のパターンのみ許可
-    const allowedPatterns = [
-      /^http:\/\/localhost:\d+$/,
-      /^http:\/\/127\.0\.0\.1:\d+$/,
-      /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
-      /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
-      /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+$/,
+    // 開発環境または特定のローカルポートを許可
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174', 
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+      'http://127.0.0.1:3000'
     ];
     
-    if (allowedPatterns.some(pattern => pattern.test(origin))) {
+    // オリジンが無い場合（Postmanなど）またはローカル開発の場合は許可
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+      console.log('✅ CORS: Allowed');
       return callback(null, true);
     }
     
+    // その他のローカルホストパターンもチェック
+    const localhostPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+    if (localhostPattern.test(origin)) {
+      console.log('✅ CORS: Allowed (localhost pattern)');
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS: Blocked');
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true
@@ -58,8 +73,20 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' })); // AI画像データ用に容量増加
 app.use(express.urlencoded({ extended: true }));
 
+// プリフライトリクエストの処理
+app.options('*', (req, res) => {
+  console.log('🚀 Preflight request received:', req.method, req.url, 'from:', req.headers.origin);
+  res.sendStatus(200);
+});
+
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.url} from ${req.headers.origin || 'no-origin'} at ${new Date().toISOString()}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -69,9 +96,17 @@ app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
+  // 明示的にCORSヘッダーを設定
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
+    origin: req.headers.origin || 'no-origin',
+    method: req.method,
     services: {
       database: 'connected',
       ai_integration: 'available'

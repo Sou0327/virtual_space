@@ -8,6 +8,14 @@ const router = express.Router();
 // Default space templates
 const defaultTemplates: SpaceTemplate[] = [
   {
+    id: 'blank-canvas',
+    name: '完全オリジナル',
+    type: 'custom',
+    description: '何もない白い空間から自由に作成',
+    preview: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&h=600&fit=crop&crop=center',
+    features: ['自由設計', 'AI対応', '無制限カスタマイズ', '完全オリジナル']
+  },
+  {
     id: 'cozy-room',
     name: 'コージーな部屋',
     type: 'room',

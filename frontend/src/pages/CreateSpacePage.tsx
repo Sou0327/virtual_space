@@ -47,7 +47,7 @@ export const CreateSpacePage: React.FC = () => {
 
     try {
       const spaceId = await createSpace(formData);
-      navigate(`/spaces/${spaceId}`);
+      navigate(`/room-builder?spaceId=${spaceId}`);
     } catch (err: any) {
       setError(err.message);
     }
@@ -59,8 +59,23 @@ export const CreateSpacePage: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">新しい空間を作成</h1>
           <p className="text-lg text-gray-600">
-            テンプレートを選んで、あなただけのバーチャル空間を作りましょう
+            テンプレートを選んで、AIルームビルダーであなただけのバーチャル空間を作りましょう
           </p>
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-blue-800">AI搭載ルームビルダー</h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  スペース作成後、AIルームビルダーで自然言語を使って家具やインテリアを自由にカスタマイズできます。「木のテーブルを置いて」「壁を青色にして」などと話しかけるだけ！
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -107,8 +122,8 @@ export const CreateSpacePage: React.FC = () => {
                   <div
                     key={template.id}
                     className={`relative border-2 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg ${formData.templateId === template.id
-                        ? 'border-primary-500 bg-primary-50 shadow-lg scale-105'
-                        : 'border-gray-200 hover:border-primary-300'
+                      ? 'border-primary-500 bg-primary-50 shadow-lg scale-105'
+                      : 'border-gray-200 hover:border-primary-300'
                       }`}
                     onClick={() => handleTemplateSelect(template.id)}
                   >
@@ -161,6 +176,11 @@ export const CreateSpacePage: React.FC = () => {
                             {template.type === 'social' && (
                               <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857" />
+                              </svg>
+                            )}
+                            {template.type === 'custom' && (
+                              <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             )}
                           </div>
@@ -233,7 +253,7 @@ export const CreateSpacePage: React.FC = () => {
               isLoading={isLoading}
               disabled={isLoading || !formData.title || !formData.templateId}
             >
-              空間を作成
+              空間を作成してカスタマイズ
             </Button>
           </div>
         </form>

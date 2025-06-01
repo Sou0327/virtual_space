@@ -4,19 +4,25 @@ import type { ApiResponse } from '../types';
 const getApiBaseUrl = () => {
   // 環境変数が設定されている場合はそれを使用
   if (import.meta.env.VITE_API_URL) {
+    console.log('🔧 Using VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
   
   // 現在のホスト名を確認
   const hostname = window.location.hostname;
+  console.log('🔧 Current hostname:', hostname);
   
   // localhostやIPアドレスの場合、同じホストでバックエンドアクセス
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:3001/api`;
+    const apiUrl = `http://${hostname}:3001/api`;
+    console.log('🔧 Using hostname-based API URL:', apiUrl);
+    return apiUrl;
   }
   
   // デフォルトはlocalhost
-  return 'http://localhost:3001/api';
+  const defaultUrl = 'http://localhost:3001/api';
+  console.log('🔧 Using default API URL:', defaultUrl);
+  return defaultUrl;
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -77,29 +83,79 @@ api.interceptors.response.use(
       status: error.response?.status,
       statusText: error.response?.statusText,
       url: error.config?.url,
+      fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
       data: error.response?.data,
       headers: error.response?.headers,
       timeout: error.config?.timeout,
       isNetworkError: !error.response,
-      isTimeoutError: error.code === 'ECONNABORTED'
+      isTimeoutError: error.code === 'ECONNABORTED',
+      requestHeaders: error.config?.headers,
+      method: error.config?.method?.toUpperCase()
     });
     
     // ネットワークエラーの詳細分析
     if (!error.response) {
-      console.error('🌐 Network Error - Possible causes:', [
-        'Backend server is not running',
-        'CORS configuration issue',
-        'Firewall blocking the request',
-        'Wrong API URL configuration'
-      ]);
+      console.error('🌐 Network Error - Detailed Analysis:', {
+        possibleCauses: [
+          'Backend server is not running on port 3001',
+          'CORS configuration issue',
+          'Firewall blocking the request',
+          'Wrong API URL configuration',
+          'DNS resolution issue'
+        ],
+        currentApiUrl: API_BASE_URL,
+        suggestedChecks: [
+          'Check if backend server is running: curl http://localhost:3001/api/health',
+          'Check browser console for CORS errors',
+          'Verify network connectivity',
+          'Check if port 3001 is accessible'
+        ]
+      });
+      
+      // バックエンドサーバーの状態をテスト
+      console.log('🔍 Testing backend connectivity...');
+      fetch('http://localhost:3001/api/health', { 
+        method: 'GET',
+        mode: 'cors'
+      })
+      .then(response => {
+        console.log('✅ Backend connectivity test successful:', response.status);
+      })
+      .catch(testError => {
+        console.error('❌ Backend connectivity test failed:', testError.message);
+      });
     }
     
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem('fanverse_token');
-      localStorage.removeItem('fanverse_user');
-      window.location.href = '/login';
+    // 認証エラー（401 Unauthorized または 403 Forbidden）の処理
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.warn('⚠️ Authentication error detected:', {
+        status: error.response.status,
+        message: error.response?.data?.message || error.message
+      });
+      
+      // JWT期限切れや無効なトークンの場合
+      const errorMessage = error.response?.data?.message || error.message || '';
+      if (errorMessage.includes('jwt expired') ||
+          errorMessage.includes('Token verification failed') ||
+          errorMessage.includes('Invalid token') ||
+          error.response?.status === 403) {
+        
+        console.warn('🔄 Token expired or invalid, clearing auth data and redirecting...');
+        
+        // ローカルストレージから認証データをクリア
+        localStorage.removeItem('fanverse_token');
+        localStorage.removeItem('fanverse_user');
+        
+        // ログインページにリダイレクト（セッション期限切れメッセージ付き）
+        if (typeof window !== 'undefined') {
+          const currentPath = window.location.pathname;
+          if (currentPath !== '/login' && currentPath !== '/register') {
+            window.location.href = '/login?message=session_expired';
+          }
+        }
+      }
     }
+    
     return Promise.reject(error);
   }
 );

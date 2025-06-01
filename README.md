@@ -218,3 +218,85 @@ MIT License
 ---
 
 **FanVerse** - インフルエンサーとファンをつなぐ新しいバーチャル体験 
+
+## 🛠️ AI API セットアップガイド
+
+### 📋 必要なAPIキー
+
+1. **OpenAI DALL-E 3** - テクスチャ生成
+   - サイト: https://platform.openai.com/api-keys
+   - 形式: `sk-proj-...` または `sk-...`
+   - コスト: $0.040/画像 (standard), $0.080/画像 (hd)
+
+2. **Stability AI** - 追加テクスチャオプション
+   - サイト: https://platform.stability.ai/
+   - 形式: `sk-...`
+   - コスト: $0.02/画像
+
+3. **Meshy AI** - 3Dモデル生成
+   - サイト: https://meshy.ai/
+   - 形式: `msy_...`
+   - コスト: $0.20/モデル
+
+### 🔧 セットアップ手順
+
+1. **APIキー取得**
+   ```bash
+   # OpenAI APIキーを取得
+   # 1. https://platform.openai.com/api-keys にアクセス
+   # 2. "Create new secret key" をクリック
+   # 3. キーをコピー（sk-proj- または sk- で始まる）
+   ```
+
+2. **環境変数設定**
+   ```bash
+   cd backend
+   cp .env.example .env
+   
+   # .envファイルを編集
+   OPENAI_API_KEY=sk-proj-あなたの実際のAPIキー
+   STABILITY_API_KEY=sk-あなたのStabilityAIキー
+   MESHY_API_KEY=msy_あなたのMeshyAIキー
+   ```
+
+3. **バックエンド再起動**
+   ```bash
+   cd backend
+   npm run dev
+   ```
+
+4. **動作確認**
+   ```bash
+   # APIキー状態確認
+   curl http://localhost:3001/api/ai/api-keys/status
+   
+   # テクスチャ生成テスト
+   curl -X POST http://localhost:3001/api/ai/generate-texture \
+     -H "Content-Type: application/json" \
+     -d '{"prompt": "brick wall texture"}'
+   ```
+
+### ⚠️ 現在のエラー解決方法
+
+もし以下のエラーが出る場合：
+```
+❌ DALL-E 3 API Error: { error: { type: 'image_generation_user_error' } }
+```
+
+**解決策:**
+1. **APIキーの確認**: `sk-proj-` または `sk-` で始まる完全なキーを使用
+2. **課金設定**: OpenAIアカウントで支払い方法が設定されているか確認
+3. **利用制限**: アカウントのクォータを確認（https://platform.openai.com/usage）
+4. **キーの権限**: APIキーがDALL-E 3へのアクセス権限を持っているか確認
+
+### 🎭 デモモード
+
+APIキーが正しく設定されていない場合、システムは自動的にデモモードで動作し、高品質なサンプルテクスチャを使用します。
+
+### 💡 コスト最適化のヒント
+
+- **開発段階**: デモモード（無料）
+- **テスト段階**: DALL-E 3 standard品質（$0.040/画像）
+- **本番環境**: DALL-E 3 hd品質（$0.080/画像）
+
+## 🚀 セットアップと起動 

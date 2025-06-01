@@ -7,14 +7,25 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+  console.log('🔐 Auth Debug:', {
+    authHeader: authHeader ? `Bearer ${authHeader.split(' ')[1]?.substring(0, 10)}...` : 'None',
+    hasToken: !!token,
+    url: req.url,
+    method: req.method
+  });
+
   if (!token) {
+    console.log('❌ No token provided');
     return res.status(401).json({ success: false, message: 'Access token required' });
   }
 
   jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err, decoded: any) => {
     if (err) {
-      return res.status(403).json({ success: false, message: 'Invalid token' });
+      console.log('❌ Token verification failed:', err.message);
+      return res.status(403).json({ success: false, message: 'Invalid token', error: err.message });
     }
+
+    console.log('✅ Token verified, userId:', decoded.userId);
 
     try {
       // Get user from database using better-sqlite3 synchronous API
@@ -22,12 +33,15 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
       const user = stmt.get(decoded.userId) as User;
       
       if (!user) {
+        console.log('❌ User not found for userId:', decoded.userId);
         return res.status(404).json({ success: false, message: 'User not found' });
       }
       
+      console.log('✅ User authenticated:', { id: user.id, username: user.username });
       req.user = user;
       next();
     } catch (error) {
+      console.error('❌ Database error during auth:', error);
       return res.status(500).json({ success: false, message: 'Database error' });
     }
   });
