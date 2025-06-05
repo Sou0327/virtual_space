@@ -30,7 +30,17 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     try {
       // Get user from database using better-sqlite3 synchronous API
       const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-      const user = stmt.get(decoded.userId) as User;
+      const user = stmt.get(decoded.userId) as User & { socialLinks?: string };
+
+      // Parse JSON fields stored as TEXT
+      if (user && typeof user.socialLinks === 'string') {
+        try {
+          user.socialLinks = JSON.parse(user.socialLinks);
+        } catch (parseError) {
+          console.warn('⚠️ Failed to parse socialLinks JSON:', parseError);
+          user.socialLinks = undefined;
+        }
+      }
       
       if (!user) {
         console.log('❌ User not found for userId:', decoded.userId);
@@ -62,7 +72,15 @@ export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction
 
     try {
       const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-      const user = stmt.get(decoded.userId) as User;
+      const user = stmt.get(decoded.userId) as User & { socialLinks?: string };
+
+      if (user && typeof user.socialLinks === 'string') {
+        try {
+          user.socialLinks = JSON.parse(user.socialLinks);
+        } catch {
+          user.socialLinks = undefined;
+        }
+      }
       
       if (user) {
         req.user = user;
