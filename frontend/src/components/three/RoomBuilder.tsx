@@ -1,217 +1,48 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+
+// Components
 import CameraControls from './CameraControls';
 import ObjectCreationPanel from './ObjectCreationPanel';
 import { RoomEnvironment } from './RoomEnvironment';
 import { ModelPanels } from './ModelPanels';
+
+// UI Components
+import { ControlPanel } from './ui/ControlPanel';
+import { ProgressOverlay } from './ui/ProgressOverlay';
+import { VisitorGuide } from './ui/VisitorGuide';
+
+// Hooks
+import { useRoomState } from '../../hooks/useRoomState';
+import { useModelManager } from '../../hooks/useModelManager';
 import useAIModelGenerator from '../../hooks/useAIModelGenerator';
-import { isMobile } from '../../utils/deviceDetection';
-import MobileBottomSheet from '../ui/MobileBottomSheet';
-import MobileActionButton from '../ui/MobileActionButton';
 
-// 型定義
-interface RoomConfig {
-  wallMaterial: string;
-  floorMaterial: string;
-  wallTexture?: string;
-  floorTexture?: string;
-  objects: Array<{
-    id: string;
-    type: string;
-    name: string;
-    position: [number, number, number];
-    rotation: [number, number, number];
-    scale: [number, number, number];
-    modelUrl?: string;
-    generated?: boolean;
-  }>;
-}
-
-interface UploadedModel {
-  id: string;
-  filename: string;
-  taskId: string;
-  size: number;
-  sizeFormatted: string;
-  createdAt: string;
-  modifiedAt: string;
-  url: string;
-  devUrl: string;
-}
-
-interface GeneratedModel {
-  id: string;
-  name: string;
-  prompt?: string;
-  type?: string;
-  modelUrl: string;
-  textureUrl?: string;
-  createdAt: Date | string;
-  aiService?: string;
-  taskId?: string;
-}
+// Types
+import type { RoomConfig } from '../../types/room';
 
 const RoomBuilder: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const spaceId = searchParams.get('spaceId');
 
-  // デバイス検出
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
-
-  // 基本状態管理
-  const [roomConfig, setRoomConfig] = useState<RoomConfig>({
-    wallMaterial: 'concrete',
-    floorMaterial: 'wood',
-    objects: []
-  });
-
-  // UI状態管理
-  const [isFullscreen] = useState(false);
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
-  const [showGrid, setShowGrid] = useState(false);
-  const [viewMode, setViewMode] = useState<'creator' | 'visitor'>('creator');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isPointerLocked, setIsPointerLocked] = useState(false);
-
-  // パネル状態管理
-  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [isObjectManagerOpen, setIsObjectManagerOpen] = useState(false);
-  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
-
-  // モデル管理
-  const [uploadedModels, setUploadedModels] = useState<UploadedModel[]>([]);
-  const [generatedModels, setGeneratedModels] = useState<GeneratedModel[]>([]);
-
-  // オブジェクトの高さ取得
-  const getObjectHeight = useCallback((type: string): number => {
-    switch (type) {
-      case 'chair': return 1.0;
-      case 'table': return 1.2;
-      case 'lamp': return 1.5;
-      case 'bookshelf': return 2.0;
-      case 'custom': return 1.0;
-      default: return 1.0;
-    }
-  }, []);
-
-  // オブジェクト管理関数
-  const addObjectToRoom = useCallback((object: any) => {
-    setRoomConfig(prev => ({
-      ...prev,
-      objects: [...prev.objects, object]
-    }));
-  }, []);
-
-  const addGeneratedModel = useCallback((model: GeneratedModel) => {
-    setGeneratedModels(prev => {
-      const updated = [model, ...prev];
-      localStorage.setItem('fanverse-generated-models', JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  // 状態管理フック
+  const roomState = useRoomState();
+  const modelManager = useModelManager(
+    roomState.getObjectHeight,
+    roomState.addObjectToRoom
+  );
 
   // AI生成フック
   const { isGenerating, generateProgress, generateAIObject } = useAIModelGenerator(
-    getObjectHeight,
-    addObjectToRoom,
-    addGeneratedModel
+    roomState.getObjectHeight,
+    roomState.addObjectToRoom,
+    modelManager.addGeneratedModel
   );
 
-  // アップロード済みモデル取得
-  const fetchUploadedModels = useCallback(async () => {
-    try {
-      const response = await fetch('http://localhost:3001/api/ai/dev/uploaded-models');
-      if (response.ok) {
-        const data = await response.json();
-        const models = data.models || data;
-        setUploadedModels(models);
-      }
-    } catch (error) {
-      console.error('❌ アップロードモデル取得エラー:', error);
-    }
-  }, []);
-
-  // アップロード済みモデルを部屋に配置
-  const useUploadedModel = useCallback((model: UploadedModel, customName?: string) => {
-    const objectName = customName || `GLBモデル_${model.taskId.slice(-4)}`;
-    const newObject = {
-      id: `uploaded-${Date.now()}`,
-      type: 'custom',
-      name: objectName,
-      position: [
-        Math.random() * 6 - 3,
-        getObjectHeight('custom'),
-        Math.random() * 6 - 3
-      ] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
-      scale: [1, 1, 1] as [number, number, number],
-      modelUrl: model.devUrl,
-      generated: false
-    };
-
-    addObjectToRoom(newObject);
-  }, [getObjectHeight, addObjectToRoom]);
-
-  // 生成済みモデル再利用
-  const reuseGeneratedModel = useCallback((model: GeneratedModel) => {
-    const newObject = {
-      id: `reused-${Date.now()}`,
-      type: model.type || 'custom',
-      name: model.name,
-      position: [
-        Math.random() * 6 - 3,
-        getObjectHeight(model.type || 'custom'),
-        Math.random() * 6 - 3
-      ] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
-      scale: [1, 1, 1] as [number, number, number],
-      modelUrl: model.modelUrl,
-      generated: true
-    };
-
-    addObjectToRoom(newObject);
-  }, [getObjectHeight, addObjectToRoom]);
-
-  // オブジェクト編集関数
-  const deleteObject = useCallback((objectId: string) => {
-    setRoomConfig(prev => ({
-      ...prev,
-      objects: prev.objects.filter(obj => obj.id !== objectId)
-    }));
-    if (selectedObjectId === objectId) {
-      setSelectedObjectId(null);
-    }
-  }, [selectedObjectId]);
-
-  const duplicateObject = useCallback((objectId: string) => {
-    const objectToDuplicate = roomConfig.objects.find(obj => obj.id === objectId);
-    if (!objectToDuplicate) return;
-
-    const newObject = {
-      ...objectToDuplicate,
-      id: `${objectToDuplicate.type}-${Date.now()}`,
-      name: `${objectToDuplicate.name} (コピー)`,
-      position: [
-        objectToDuplicate.position[0] + 1,
-        objectToDuplicate.position[1],
-        objectToDuplicate.position[2] + 1
-      ] as [number, number, number]
-    };
-
-    addObjectToRoom(newObject);
-  }, [roomConfig.objects, addObjectToRoom]);
-
-  const renameObject = useCallback((objectId: string, newName: string) => {
-    setRoomConfig(prev => ({
-      ...prev,
-      objects: prev.objects.map(obj =>
-        obj.id === objectId ? { ...obj, name: newName } : obj
-      )
-    }));
-  }, []);
+  // その他の状態
+  const [isFullscreen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // スペース保存
   const saveSpace = useCallback(async () => {
@@ -221,7 +52,7 @@ const RoomBuilder: React.FC = () => {
       const response = await fetch(`/api/spaces/${spaceId}/room-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(roomConfig)
+        body: JSON.stringify(roomState.roomConfig)
       });
       if (response.ok) {
         console.log('💾 Room configuration saved');
@@ -231,52 +62,44 @@ const RoomBuilder: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [spaceId, roomConfig]);
-
-  // 初期化（デバイス検出を追加）
-  useEffect(() => {
-    setIsMobileDevice(isMobile());
-    fetchUploadedModels();
-    const saved = JSON.parse(localStorage.getItem('fanverse-generated-models') || '[]');
-    setGeneratedModels(saved);
-  }, [fetchUploadedModels]);
+  }, [spaceId, roomState.roomConfig]);
 
   // キーボードショートカット
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isCreatePanelOpen || isObjectManagerOpen || isEditPanelOpen) return;
+      if (roomState.isCreatePanelOpen || roomState.isObjectManagerOpen || roomState.isEditPanelOpen) return;
 
       const target = event.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
       switch (event.key.toLowerCase()) {
         case 'g':
-          if (selectedObjectId) {
-            setEditMode('translate');
+          if (roomState.selectedObjectId) {
+            roomState.setEditMode('translate');
             event.preventDefault();
           }
           break;
         case 'r':
-          if (selectedObjectId) {
-            setEditMode('rotate');
+          if (roomState.selectedObjectId) {
+            roomState.setEditMode('rotate');
             event.preventDefault();
           }
           break;
         case 's':
-          if (selectedObjectId) {
-            setEditMode('scale');
+          if (roomState.selectedObjectId) {
+            roomState.setEditMode('scale');
             event.preventDefault();
           }
           break;
         case 'delete':
         case 'backspace':
-          if (selectedObjectId) {
-            deleteObject(selectedObjectId);
+          if (roomState.selectedObjectId) {
+            roomState.deleteObject(roomState.selectedObjectId);
             event.preventDefault();
           }
           break;
         case 'h':
-          setShowGrid(!showGrid);
+          roomState.setShowGrid(!roomState.showGrid);
           event.preventDefault();
           break;
       }
@@ -284,7 +107,7 @@ const RoomBuilder: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedObjectId, showGrid, isCreatePanelOpen, isObjectManagerOpen, isEditPanelOpen, deleteObject]);
+  }, [roomState]);
 
   return (
     <div className="w-full h-screen bg-gray-900">
@@ -293,103 +116,59 @@ const RoomBuilder: React.FC = () => {
         shadows
         camera={{ fov: 75, position: [0, 1.6, 5] }}
         onPointerMissed={() => {
-          if (!isCreatePanelOpen) {
-            setSelectedObjectId(null);
+          if (!roomState.isCreatePanelOpen) {
+            roomState.setSelectedObjectId(null);
           }
         }}
-        // モバイル用最適化設定
-        gl={{
-          antialias: !isMobileDevice,
-          powerPreference: isMobileDevice ? 'low-power' : 'high-performance'
-        }}
-        dpr={isMobileDevice ? [1, 1.5] : [1, 2]}
       >
-        {/* Lighting - モバイルで軽量化 */}
+        {/* Lighting */}
         <ambientLight intensity={0.6} />
         <directionalLight
           position={[10, 10, 5]}
           intensity={1.2}
-          castShadow={!isMobileDevice} // モバイルでは影を無効化
-          shadow-mapSize-width={isMobileDevice ? 1024 : 2048}
-          shadow-mapSize-height={isMobileDevice ? 1024 : 2048}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
         />
         <pointLight position={[0, 3, 0]} intensity={0.5} />
 
         {/* Room Environment */}
         <RoomEnvironment
-          config={roomConfig}
-          selectedObjectId={viewMode === 'visitor' ? null : selectedObjectId}
-          onObjectSelect={viewMode === 'visitor' ? () => { } : setSelectedObjectId}
+          config={roomState.roomConfig}
+          selectedObjectId={roomState.viewMode === 'visitor' ? null : roomState.selectedObjectId}
+          onObjectSelect={roomState.viewMode === 'visitor' ? () => { } : roomState.setSelectedObjectId}
           onObjectTransform={(id, position, rotation, scale) => {
-            if (viewMode === 'visitor') return;
-            setRoomConfig(prev => ({
-              ...prev,
-              objects: prev.objects.map(obj =>
-                obj.id === id ? { ...obj, position, rotation, scale } : obj
-              )
-            }));
+            if (roomState.viewMode === 'visitor') return;
+            roomState.updateObjectTransform(id, position, rotation, scale);
           }}
           isPointerLocked={false}
-          editMode={editMode}
-          showGrid={showGrid}
+          editMode={roomState.editMode}
+          showGrid={roomState.showGrid}
+          gridSize={0.5}
         />
 
         {/* Camera Controls */}
         <CameraControls
-          viewMode={viewMode}
-          disabled={isCreatePanelOpen || isObjectManagerOpen || isEditPanelOpen}
-          onPointerLockChange={setIsPointerLocked}
+          viewMode={roomState.viewMode}
+          disabled={roomState.isCreatePanelOpen || roomState.isObjectManagerOpen || roomState.isEditPanelOpen}
+          onPointerLockChange={roomState.setIsPointerLocked}
         />
       </Canvas>
 
-      {/* ビジターモード案内UI（デスクトップのみ） */}
-      {viewMode === 'visitor' && !isPointerLocked && !isMobileDevice && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50 pointer-events-auto">
-          <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 text-white text-center">
-            <h3 className="text-xl font-bold mb-4">🎮 ビジターモード</h3>
-            <p className="mb-4">画面をクリックして歩行モードを開始してください</p>
-            <div className="text-sm text-gray-300">
-              <p>W/A/S/D: 移動</p>
-              <p>Shift: 走る</p>
-              <p>ESC: マウスロック解除</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* UI Components */}
+      <VisitorGuide
+        viewMode={roomState.viewMode}
+        isPointerLocked={roomState.isPointerLocked}
+        onViewModeChange={roomState.setViewMode}
+      />
 
-      {/* モバイル用ビジターモード案内 */}
-      {viewMode === 'visitor' && isMobileDevice && (
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/90 backdrop-blur-sm rounded-lg p-6 text-white text-center z-50">
-          <h3 className="text-lg font-bold mb-4">👀 ビジターモード</h3>
-          <p className="mb-4">タッチ操作で空間を探索してください</p>
-          <div className="text-sm text-gray-300">
-            <p>1本指: 回転</p>
-            <p>2本指: ズーム・移動</p>
-          </div>
-        </div>
-      )}
+      <ProgressOverlay
+        progress={generateProgress}
+        visible={generateProgress.percentage > 0}
+      />
 
-      {/* Progress Bar */}
-      {generateProgress.percentage > 0 && (
-        <div className={`fixed ${isMobileDevice ? 'bottom-32' : 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2'} bg-black/90 backdrop-blur-sm rounded-lg p-6 text-white max-w-md w-full mx-4 z-50`}>
-          <div className="text-center mb-4">
-            <h3 className="text-lg font-bold">{generateProgress.stage === 'completed' ? '✅ 生成完了！' : '🤖 AI生成中...'}</h3>
-            <p className="text-sm text-gray-300 mt-1">{generateProgress.message}</p>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
-            <div
-              className={`h-3 rounded-full transition-all duration-300 ${generateProgress.stage === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`}
-              style={{ width: `${generateProgress.percentage}%` }}
-            ></div>
-          </div>
-          <div className="text-center text-xs text-gray-400">
-            {generateProgress.percentage}% - {generateProgress.stage}
-          </div>
-        </div>
-      )}
-
-      {/* Navigation Header - デスクトップのみ */}
-      {!isFullscreen && !isMobileDevice && (
+      {/* Navigation Header */}
+      {!isFullscreen && (
         <div className="fixed top-4 left-4 z-50 bg-black/80 backdrop-blur-sm rounded-lg p-3">
           <div className="flex items-center space-x-3">
             <button
@@ -420,620 +199,176 @@ const RoomBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* モバイル用ヘッダー */}
-      {isMobileDevice && (
-        <div className="fixed top-4 left-4 right-4 z-50 bg-black/80 backdrop-blur-sm rounded-lg p-3">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center space-x-2 text-white hover:text-blue-400 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span className="text-sm">戻る</span>
-            </button>
-
-            <div className="flex items-center space-x-2 text-white">
-              <span className="text-sm">{viewMode === 'creator' ? '🏗️ 編集' : '👀 閲覧'}</span>
-              <div className="text-xs bg-gray-700 px-2 py-1 rounded">
-                {roomConfig.objects.length}個
-              </div>
-            </div>
-
-            {spaceId && (
-              <button
-                onClick={saveSpace}
-                disabled={isSaving}
-                className="text-white hover:text-green-400 transition-colors disabled:opacity-50"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
+      {/* Object Creation Button */}
+      {roomState.viewMode === 'creator' && (
+        <button
+          onClick={() => roomState.setIsCreatePanelOpen(true)}
+          disabled={isGenerating}
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full shadow-lg transition-all duration-200 hover:scale-110 flex items-center justify-center"
+        >
+          {isGenerating ? (
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+          ) : (
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          )}
+        </button>
       )}
 
-      {/* UI Controls: モバイルとデスクトップで分岐 */}
-      {isMobileDevice ? (
-        // モバイル用UI
-        <MobileActionButton
-          onCreateObject={() => setIsCreatePanelOpen(true)}
-          onManageObjects={() => setIsObjectManagerOpen(true)}
-          onToggleGrid={() => setShowGrid(!showGrid)}
-          onToggleViewMode={() => setViewMode(viewMode === 'creator' ? 'visitor' : 'creator')}
-          viewMode={viewMode}
-          showGrid={showGrid}
-          isGenerating={isGenerating}
-          objectCount={roomConfig.objects.length}
+      {/* Control Panel - クリエイターモードのみ */}
+      {roomState.viewMode === 'creator' && (
+        <ControlPanel
+          viewMode={roomState.viewMode}
+          selectedObjectId={roomState.selectedObjectId}
+          roomObjects={roomState.roomConfig.objects}
+          editMode={roomState.editMode}
+          showGrid={roomState.showGrid}
+          onViewModeChange={roomState.setViewMode}
+          onEditModeChange={roomState.setEditMode}
+          onShowGridToggle={() => roomState.setShowGrid(!roomState.showGrid)}
+          onObjectManagerOpen={() => roomState.setIsObjectManagerOpen(true)}
+          onDeleteObject={roomState.deleteObject}
         />
-      ) : (
-        // デスクトップ用UI（既存）
-        <>
-          {/* Object Creation Button */}
-          {viewMode === 'creator' && (
-            <button
-              onClick={() => setIsCreatePanelOpen(true)}
-              disabled={isGenerating}
-              className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full shadow-lg transition-all duration-200 hover:scale-110 flex items-center justify-center"
-            >
-              {isGenerating ? (
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              ) : (
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              )}
-            </button>
-          )}
-
-          {/* Control Panel - クリエイターモードのみ */}
-          {viewMode === 'creator' && (
-            <div className="fixed bottom-6 left-6 z-40 bg-black/90 backdrop-blur-sm rounded-lg p-4 text-white max-w-xs">
-              <h3 className="text-sm font-bold mb-3 text-blue-400">🎮 操作パネル</h3>
-
-              {/* View Mode Toggle */}
-              <div className="mb-3">
-                <label className="block text-xs text-gray-300 mb-2">🎥 視点モード</label>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setViewMode('creator')}
-                    className={`px-3 py-1 rounded text-xs transition-colors ${String(viewMode) === 'creator' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300'}`}
-                  >
-                    🏗️ クリエイター
-                  </button>
-                  <button
-                    onClick={() => setViewMode('visitor')}
-                    className={`px-3 py-1 rounded text-xs transition-colors ${String(viewMode) === 'visitor' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300'}`}
-                  >
-                    👤 ビジター
-                  </button>
-                </div>
-              </div>
-
-              {/* Selected Object Info */}
-              {selectedObjectId && (
-                <div className="mb-3 p-2 bg-green-600/20 rounded border border-green-500/30">
-                  <div className="text-xs text-green-400">
-                    選択中: {roomConfig.objects.find(obj => obj.id === selectedObjectId)?.name || 'Unknown'}
-                  </div>
-                </div>
-              )}
-
-              {/* Object Count */}
-              <div className="mb-3 text-xs text-gray-300">
-                配置済み: {roomConfig.objects.length} 個
-              </div>
-
-              {/* Quick Actions */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <button
-                  onClick={() => setShowGrid(!showGrid)}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${showGrid ? 'bg-green-600' : 'bg-gray-600'}`}
-                >
-                  🔲 グリッド
-                </button>
-                <button
-                  onClick={() => setIsObjectManagerOpen(true)}
-                  className="px-2 py-1 bg-purple-600 rounded text-xs hover:bg-purple-700 transition-colors"
-                >
-                  📦 管理
-                </button>
-                {selectedObjectId && (
-                  <>
-                    <button
-                      onClick={() => setEditMode('translate')}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${editMode === 'translate' ? 'bg-blue-600' : 'bg-gray-600'}`}
-                    >
-                      📍 移動
-                    </button>
-                    <button
-                      onClick={() => setEditMode('rotate')}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${editMode === 'rotate' ? 'bg-blue-600' : 'bg-gray-600'}`}
-                    >
-                      🔄 回転
-                    </button>
-                    <button
-                      onClick={() => setEditMode('scale')}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${editMode === 'scale' ? 'bg-blue-600' : 'bg-gray-600'}`}
-                    >
-                      📏 拡縮
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('このオブジェクトを削除しますか？')) {
-                          deleteObject(selectedObjectId);
-                        }
-                      }}
-                      className="px-2 py-1 bg-red-600 rounded text-xs hover:bg-red-700 transition-colors"
-                    >
-                      🗑️ 削除
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </>
       )}
 
       {/* Model Panels */}
       <ModelPanels
         isFullscreen={isFullscreen}
-        uploadedModels={uploadedModels}
-        generatedModels={generatedModels}
-        onFetchUploadedModels={fetchUploadedModels}
-        onUseUploadedModel={useUploadedModel}
-        onReuseGeneratedModel={reuseGeneratedModel}
-        onClearGeneratedModels={() => {
-          localStorage.removeItem('fanverse-generated-models');
-          setGeneratedModels([]);
-        }}
+        uploadedModels={modelManager.uploadedModels}
+        generatedModels={modelManager.generatedModels}
+        onFetchUploadedModels={modelManager.fetchUploadedModels}
+        onUseUploadedModel={modelManager.useUploadedModel}
+        onReuseGeneratedModel={modelManager.reuseGeneratedModel}
+        onClearGeneratedModels={modelManager.clearGeneratedModels}
       />
 
-      {/* Object Creation Panel: モバイル対応 */}
-      {isMobileDevice ? (
-        <MobileBottomSheet
-          isOpen={isCreatePanelOpen}
-          onClose={() => setIsCreatePanelOpen(false)}
-          title="🎨 AI オブジェクト作成"
-        >
-          <ObjectCreationPanel
-            isOpen={true}
-            onClose={() => setIsCreatePanelOpen(false)}
-            onCreateObject={(prompt: string) => generateAIObject(prompt, 'meshy')}
-            isGenerating={isGenerating}
-          />
-        </MobileBottomSheet>
-      ) : (
-        <ObjectCreationPanel
-          isOpen={isCreatePanelOpen}
-          onClose={() => setIsCreatePanelOpen(false)}
-          onCreateObject={(prompt: string) => generateAIObject(prompt, 'meshy')}
-          isGenerating={isGenerating}
-        />
-      )}
+      {/* Object Creation Panel */}
+      <ObjectCreationPanel
+        isOpen={roomState.isCreatePanelOpen}
+        onClose={() => roomState.setIsCreatePanelOpen(false)}
+        onCreateObject={(prompt: string) => generateAIObject(prompt, 'meshy')}
+        isGenerating={isGenerating}
+      />
 
-      {/* Object Manager Panel: モバイル対応 */}
-      {isObjectManagerOpen && (
-        <>
-          {isMobileDevice ? (
-            <MobileBottomSheet
-              isOpen={isObjectManagerOpen}
-              onClose={() => setIsObjectManagerOpen(false)}
-              title="📦 配置済みオブジェクト"
-            >
-              <div className="space-y-3">
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-300">📊 合計: <span className="text-white font-bold">{roomConfig.objects.length}</span></span>
-                    <span className="text-gray-300">✅ 選択: <span className="text-green-400">{selectedObjectId ? roomConfig.objects.find(obj => obj.id === selectedObjectId)?.name || 'Unknown' : 'なし'}</span></span>
-                  </div>
-                </div>
+      {/* Object Manager Panel */}
+      {roomState.isObjectManagerOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              roomState.setIsObjectManagerOpen(false);
+            }
+          }}>
+          <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 max-w-2xl w-full max-h-[80vh] mx-4 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}>
 
-                {roomConfig.objects.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <p>📭 配置されたオブジェクトがありません</p>
-                    <p className="text-sm mt-2">右下のボタンでオブジェクトを作成してみましょう</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {roomConfig.objects.map((obj, index) => (
-                      <div
-                        key={obj.id}
-                        className={`bg-gray-800 rounded-lg p-3 border-2 transition-all ${selectedObjectId === obj.id ? 'border-green-500 bg-gray-750' : 'border-transparent'}`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">#{index + 1}</span>
-                            <span className="text-sm font-medium text-white">{obj.name}</span>
-                            <span className="text-xs text-gray-400">({obj.type})</span>
-                            {obj.generated && <span className="text-xs bg-blue-600 text-white px-1 rounded">AI</span>}
-                          </div>
-                        </div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">🎯 配置済みオブジェクト管理</h2>
+              <button
+                onClick={() => roomState.setIsObjectManagerOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedObjectId(obj.id);
-                              setIsObjectManagerOpen(false);
-                            }}
-                            className="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
-                          >
-                            🎯 選択
-                          </button>
-                          <button
-                            onClick={() => duplicateObject(obj.id)}
-                            className="px-3 py-2 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 transition-colors"
-                          >
-                            📋 複製
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newName = prompt('新しい名前を入力:', obj.name);
-                              if (newName && newName.trim()) {
-                                renameObject(obj.id, newName.trim());
-                              }
-                            }}
-                            className="px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors"
-                          >
-                            ✏️ 名前変更
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`「${obj.name}」を削除しますか？`)) {
-                                deleteObject(obj.id);
-                              }
-                            }}
-                            className="px-3 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-                          >
-                            🗑️ 削除
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-gray-600">
-                  <button
-                    onClick={() => {
-                      if (confirm('全てのオブジェクトを削除しますか？')) {
-                        setRoomConfig(prev => ({ ...prev, objects: [] }));
-                        setSelectedObjectId(null);
-                        setIsObjectManagerOpen(false);
-                      }
-                    }}
-                    className="w-full px-4 py-3 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-                  >
-                    🗑️ 全削除
-                  </button>
-                </div>
-              </div>
-            </MobileBottomSheet>
-          ) : (
-            // デスクトップ版（既存）
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setIsObjectManagerOpen(false);
-                }
-              }}>
-              <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 max-w-2xl w-full max-h-[80vh] mx-4 overflow-hidden flex flex-col"
-                onClick={(e) => e.stopPropagation()}>
-
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-white">📦 配置済みオブジェクト管理</h2>
-                  <button
-                    onClick={() => setIsObjectManagerOpen(false)}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="bg-gray-800 rounded-lg p-3 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-300">📊 合計オブジェクト: <span className="text-white font-bold">{roomConfig.objects.length}</span></span>
-                    <span className="text-gray-300">✅ 選択中: <span className="text-green-400">{selectedObjectId ? roomConfig.objects.find(obj => obj.id === selectedObjectId)?.name || 'Unknown' : 'なし'}</span></span>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-2">
-                  {roomConfig.objects.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400">
-                      <p>📭 配置されたオブジェクトがありません</p>
-                      <p className="text-sm mt-2">右下のプラスボタンでオブジェクトを作成してみましょう</p>
-                    </div>
-                  ) : (
-                    roomConfig.objects.map((obj, index) => (
-                      <div
-                        key={obj.id}
-                        className={`bg-gray-800 rounded-lg p-3 border-2 transition-all ${selectedObjectId === obj.id ? 'border-green-500 bg-gray-750' : 'border-transparent hover:border-gray-600'}`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">#{index + 1}</span>
-                            <span className="text-sm font-medium text-white">{obj.name}</span>
-                            <span className="text-xs text-gray-400">({obj.type})</span>
-                            {obj.generated && <span className="text-xs bg-blue-600 text-white px-1 rounded">AI</span>}
-                          </div>
-                        </div>
-
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => {
-                              setSelectedObjectId(obj.id);
-                              setIsObjectManagerOpen(false);
-                            }}
-                            className="flex-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                          >
-                            🎯 選択
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newName = prompt('新しい名前を入力:', obj.name);
-                              if (newName && newName.trim()) {
-                                renameObject(obj.id, newName.trim());
-                              }
-                            }}
-                            className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => duplicateObject(obj.id)}
-                            className="px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition-colors"
-                          >
-                            📋
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`「${obj.name}」を削除しますか？`)) {
-                                deleteObject(obj.id);
-                              }
-                            }}
-                            className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-600">
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => {
-                        if (confirm('全てのオブジェクトを削除しますか？')) {
-                          setRoomConfig(prev => ({ ...prev, objects: [] }));
-                          setSelectedObjectId(null);
-                          setIsObjectManagerOpen(false);
-                        }
-                      }}
-                      className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-                    >
-                      🗑️ 全削除
-                    </button>
-                    <button
-                      onClick={() => setIsObjectManagerOpen(false)}
-                      className="flex-1 px-4 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors"
-                    >
-                      閉じる
-                    </button>
-                  </div>
-                </div>
+            <div className="bg-gray-800 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-300">📊 合計オブジェクト: <span className="text-white font-bold">{roomState.roomConfig.objects.length}</span></span>
+                <span className="text-gray-300">✅ 選択中: <span className="text-green-400">{roomState.selectedObjectId ? roomState.roomConfig.objects.find(obj => obj.id === roomState.selectedObjectId)?.name || 'Unknown' : 'なし'}</span></span>
               </div>
             </div>
-          )}
-        </>
-      )}
 
-      {/* Object Edit Panel: モバイル対応 */}
-      {isEditPanelOpen && selectedObjectId && (
-        <>
-          {isMobileDevice ? (
-            <MobileBottomSheet
-              isOpen={isEditPanelOpen}
-              onClose={() => setIsEditPanelOpen(false)}
-              title="🔧 オブジェクト編集"
-            >
-              {(() => {
-                const selectedObject = roomConfig.objects.find(obj => obj.id === selectedObjectId);
-                if (!selectedObject) {
-                  return (
-                    <div className="text-center text-white">
-                      <p>⚠️ オブジェクトが見つかりません</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-4">
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-sm text-gray-300">
-                        <span className="font-medium text-white">{selectedObject.name}</span>
-                        <span className="text-gray-400 ml-2">({selectedObject.type})</span>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {roomState.roomConfig.objects.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p>📭 配置されたオブジェクトがありません</p>
+                  <p className="text-sm mt-2">右下のプラスボタンでオブジェクトを作成してみましょう</p>
+                </div>
+              ) : (
+                roomState.roomConfig.objects.map((obj, index) => (
+                  <div
+                    key={obj.id}
+                    className={`bg-gray-800 rounded-lg p-3 border-2 transition-all ${roomState.selectedObjectId === obj.id ? 'border-green-500 bg-gray-750' : 'border-transparent hover:border-gray-600'}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">#{index + 1}</span>
+                        <span className="text-sm font-medium text-white">{obj.name}</span>
+                        <span className="text-xs text-gray-400">({obj.type})</span>
+                        {obj.generated && <span className="text-xs bg-blue-600 text-white px-1 rounded">AI</span>}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">編集モード</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => setEditMode('translate')}
-                          className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'translate' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
-                        >
-                          📍 移動
-                        </button>
-                        <button
-                          onClick={() => setEditMode('rotate')}
-                          className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'rotate' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
-                        >
-                          🔄 回転
-                        </button>
-                        <button
-                          onClick={() => setEditMode('scale')}
-                          className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'scale' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
-                        >
-                          📏 スケール
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">名前</label>
-                      <input
-                        type="text"
-                        value={selectedObject.name}
-                        onChange={(e) => renameObject(selectedObjectId, e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-800 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex space-x-2">
                       <button
-                        onClick={() => duplicateObject(selectedObjectId)}
-                        className="px-4 py-3 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                        onClick={() => {
+                          roomState.setSelectedObjectId(obj.id);
+                          roomState.setIsObjectManagerOpen(false);
+                        }}
+                        className="flex-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
                       >
-                        📋 複製
+                        🎯 選択
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`「${selectedObject.name}」を削除しますか？`)) {
-                            deleteObject(selectedObjectId);
-                            setIsEditPanelOpen(false);
+                          const newName = prompt('新しい名前を入力:', obj.name);
+                          if (newName && newName.trim()) {
+                            roomState.renameObject(obj.id, newName.trim());
                           }
                         }}
-                        className="px-4 py-3 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors"
                       >
-                        🗑️ 削除
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => roomState.duplicateObject(obj.id)}
+                        className="px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition-colors"
+                      >
+                        📋
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`「${obj.name}」を削除しますか？`)) {
+                            roomState.deleteObject(obj.id);
+                          }
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                      >
+                        🗑️
                       </button>
                     </div>
                   </div>
-                );
-              })()}
-            </MobileBottomSheet>
-          ) : (
-            // デスクトップ版（既存）
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setIsEditPanelOpen(false);
-                }
-              }}>
-              <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 max-w-md w-full mx-4 border border-white/20"
-                onClick={(e) => e.stopPropagation()}>
+                ))
+              )}
+            </div>
 
-                {(() => {
-                  const selectedObject = roomConfig.objects.find(obj => obj.id === selectedObjectId);
-                  if (!selectedObject) {
-                    return (
-                      <div className="text-center text-white">
-                        <p>⚠️ オブジェクトが見つかりません</p>
-                        <button
-                          onClick={() => setIsEditPanelOpen(false)}
-                          className="mt-4 px-4 py-2 bg-gray-600 text-white rounded"
-                        >
-                          閉じる
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <>
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-white">🔧 オブジェクト編集</h2>
-                        <button
-                          onClick={() => setIsEditPanelOpen(false)}
-                          className="text-gray-400 hover:text-white transition-colors"
-                        >
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div className="bg-gray-800 rounded-lg p-3 mb-4">
-                        <div className="text-sm text-gray-300 mb-2">
-                          <span className="font-medium text-white">{selectedObject.name}</span>
-                          <span className="text-gray-400 ml-2">({selectedObject.type})</span>
-                        </div>
-                      </div>
-
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">編集モード</label>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setEditMode('translate')}
-                            className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'translate' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                          >
-                            📍 移動
-                          </button>
-                          <button
-                            onClick={() => setEditMode('rotate')}
-                            className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'rotate' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                          >
-                            🔄 回転
-                          </button>
-                          <button
-                            onClick={() => setEditMode('scale')}
-                            className={`px-3 py-2 rounded text-sm transition-colors ${editMode === 'scale' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                          >
-                            📏 スケール
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">名前</label>
-                        <input
-                          type="text"
-                          value={selectedObject.name}
-                          onChange={(e) => renameObject(selectedObjectId, e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-800 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => duplicateObject(selectedObjectId)}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                        >
-                          📋 複製
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`「${selectedObject.name}」を削除しますか？`)) {
-                              deleteObject(selectedObjectId);
-                              setIsEditPanelOpen(false);
-                            }
-                          }}
-                          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                        >
-                          🗑️ 削除
-                        </button>
-                        <button
-                          onClick={() => setIsEditPanelOpen(false)}
-                          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                        >
-                          閉じる
-                        </button>
-                      </div>
-                    </>
-                  );
-                })()}
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    if (confirm('全てのオブジェクトを削除しますか？')) {
+                      roomState.setRoomConfig(prev => ({ ...prev, objects: [] }));
+                      roomState.setSelectedObjectId(null);
+                      roomState.setIsObjectManagerOpen(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
+                >
+                  🗑️ 全削除
+                </button>
+                <button
+                  onClick={() => roomState.setIsObjectManagerOpen(false)}
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors"
+                >
+                  閉じる
+                </button>
               </div>
             </div>
-          )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

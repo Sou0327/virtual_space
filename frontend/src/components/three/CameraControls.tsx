@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { isMobile } from '../../utils/deviceDetection';
 
 interface CameraControlsProps {
   viewMode: 'creator' | 'visitor';
@@ -15,7 +14,6 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
   const orbitControlsRef = useRef<any>();
   const pointerLockControlsRef = useRef<any>();
   const [isLocked, setIsLocked] = useState(false);
-  const [deviceIsMobile, setDeviceIsMobile] = useState(false);
 
   // 移動関連の状態
   const moveState = useRef({
@@ -27,11 +25,6 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
   });
 
   const velocity = useRef(new THREE.Vector3());
-
-  // デバイス検出
-  useEffect(() => {
-    setDeviceIsMobile(isMobile());
-  }, []);
 
   useEffect(() => {
     // 視点モードに応じてカメラ位置を設定
@@ -47,9 +40,9 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
     }
   }, [camera, viewMode]);
 
-  // PointerLock用のキーイベント処理（デスクトップのみ）
+  // PointerLock用のキーイベント処理
   useEffect(() => {
-    if (viewMode !== 'visitor' || disabled || deviceIsMobile) return;
+    if (viewMode !== 'visitor' || disabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       switch (event.code) {
@@ -100,11 +93,11 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [viewMode, disabled, deviceIsMobile]);
+  }, [viewMode, disabled]);
 
-  // ビジター歩行フレーム処理（デスクトップのみ）
+  // ビジター歩行フレーム処理
   useFrame((_, delta) => {
-    if (viewMode !== 'visitor' || disabled || !isLocked || deviceIsMobile) return;
+    if (viewMode !== 'visitor' || disabled || !isLocked) return;
 
     const direction = new THREE.Vector3();
     const right = new THREE.Vector3();
@@ -146,9 +139,9 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
     camera.position.z = Math.max(-9, Math.min(9, camera.position.z));
   });
 
-  // クリエイター用キーボード移動（デスクトップのみ）
+  // クリエイター用キーボード移動
   useEffect(() => {
-    if (viewMode !== 'creator' || disabled || deviceIsMobile) return;
+    if (viewMode !== 'creator' || disabled) return;
 
     const keys = {
       w: false, a: false, s: false, d: false,
@@ -232,61 +225,32 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animationId);
     };
-  }, [camera, disabled, viewMode, deviceIsMobile]);
+  }, [camera, disabled, viewMode]);
 
-  // ビジターモード：デスクトップではPointerLock、モバイルではOrbitControls
   if (viewMode === 'visitor') {
-    if (deviceIsMobile) {
-      // モバイル：OrbitControlsでタッチ操作
-      return (
-        <OrbitControls
-          ref={orbitControlsRef}
-          enableDamping={true}
-          dampingFactor={0.05}
-          panSpeed={2.0}
-          rotateSpeed={1.0}
-          zoomSpeed={1.5}
-          minDistance={0.5}
-          maxDistance={15}
-          maxPolarAngle={Math.PI * 0.85}
-          enablePan={true}
-          enableRotate={true}
-          enableZoom={true}
-          target={[0, 1.6, 0]}
-          // タッチ専用設定
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN
-          }}
-        />
-      );
-    } else {
-      // デスクトップ：PointerLockControls
-      return (
-        <PointerLockControls
-          ref={pointerLockControlsRef}
-          onLock={() => {
-            setIsLocked(true);
-            onPointerLockChange?.(true);
-          }}
-          onUnlock={() => {
-            setIsLocked(false);
-            onPointerLockChange?.(false);
-          }}
-        />
-      );
-    }
+    return (
+      <PointerLockControls
+        ref={pointerLockControlsRef}
+        onLock={() => {
+          setIsLocked(true);
+          onPointerLockChange?.(true);
+        }}
+        onUnlock={() => {
+          setIsLocked(false);
+          onPointerLockChange?.(false);
+        }}
+      />
+    );
   }
 
-  // クリエイターモード：OrbitControls（全デバイス共通、モバイル最適化）
   return (
     <OrbitControls
       ref={orbitControlsRef}
       enableDamping={true}
-      dampingFactor={deviceIsMobile ? 0.05 : 0.1}
-      panSpeed={deviceIsMobile ? 2.0 : 1.0}
-      rotateSpeed={deviceIsMobile ? 1.2 : 0.8}
-      zoomSpeed={deviceIsMobile ? 1.5 : 1.0}
+      dampingFactor={0.1}
+      panSpeed={1.0}
+      rotateSpeed={0.8}
+      zoomSpeed={1.0}
       minDistance={1}
       maxDistance={50}
       maxPolarAngle={Math.PI * 0.9}
@@ -294,11 +258,6 @@ const CameraControls: React.FC<CameraControlsProps> = ({ viewMode, disabled = fa
       enableRotate={true}
       enableZoom={true}
       target={[0, 0, 0]}
-      // タッチデバイス用設定
-      touches={deviceIsMobile ? {
-        ONE: THREE.TOUCH.ROTATE,
-        TWO: THREE.TOUCH.DOLLY_PAN
-      } : undefined}
     />
   );
 };
