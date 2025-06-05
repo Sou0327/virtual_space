@@ -53,7 +53,15 @@ router.get('/:username', (req, res) => {
     const stmt = db.prepare(
       'SELECT id, username, displayName, userType, avatar, bio, socialLinks, createdAt FROM users WHERE username = ?'
     );
-    const user = stmt.get(username);
+    const user = stmt.get(username) as any;
+
+    if (user && typeof user.socialLinks === 'string') {
+      try {
+        user.socialLinks = JSON.parse(user.socialLinks);
+      } catch {
+        user.socialLinks = undefined;
+      }
+    }
 
     if (!user) {
       return res.status(404).json({
