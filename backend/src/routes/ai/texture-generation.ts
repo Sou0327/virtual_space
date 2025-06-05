@@ -57,7 +57,7 @@ function selectTextureUrl(type: 'wall' | 'floor', material: string): string {
  * 壁・床テクスチャ生成エンドポイント
  * 現在は高品質モックテクスチャを使用（AI API統合は将来実装）
  */
-router.post('/generate-wall-floor', async (req, res) => {
+async function generateTextureHandler(req: express.Request, res: express.Response) {
   try {
     const { type, material, size = { width: 10, height: 5, depth: 0.2 } } = req.body;
     
@@ -109,6 +109,9 @@ router.post('/generate-wall-floor', async (req, res) => {
     
     res.json(fallbackResult);
   }
-});
+}
+
+router.post('/generate-wall-floor', generateTextureHandler);
+router.post('/generate-texture', generateTextureHandler);
 
 export default router; 
