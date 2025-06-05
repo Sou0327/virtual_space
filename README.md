@@ -271,10 +271,12 @@ MIT License
    curl http://localhost:3001/api/ai/api-keys/status
    
    # テクスチャ生成テスト
-   curl -X POST http://localhost:3001/api/ai/generate-texture \
-     -H "Content-Type: application/json" \
-     -d '{"prompt": "brick wall texture"}'
-   ```
+  curl -X POST http://localhost:3001/api/ai/generate-texture \
+    -H "Content-Type: application/json" \
+    -d '{"prompt": "brick wall texture"}'
+  ```
+
+`/generate-texture` は旧エンドポイント `/generate-wall-floor` のエイリアスです。
 
 ### ⚠️ 現在のエラー解決方法
 
