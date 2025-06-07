@@ -238,7 +238,13 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
       >
         <planeGeometry args={[20, 20]} />
         <meshStandardMaterial
-          color={config.floorMaterial === 'wood' ? '#DEB887' : '#D3D3D3'}
+          color={
+            config.floorMaterial === 'wood'
+              ? '#DEB887'
+              : config.floorMaterial === 'tile'
+                ? '#DCDCDC'
+                : '#D3D3D3'
+          }
           roughness={0.8}
           metalness={0.1}
         />
@@ -249,7 +255,13 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
       <mesh position={[0, 2.5, -10]} castShadow receiveShadow>
         <boxGeometry args={[20, 5, 0.2]} />
         <meshStandardMaterial
-          color={config.wallMaterial === 'brick' ? '#B22222' : '#F5F5F5'}
+          color={
+            config.wallMaterial === 'brick'
+              ? '#B22222'
+              : config.wallMaterial === 'wood'
+                ? '#DEB887'
+                : '#F5F5F5'
+          }
           roughness={0.9}
         />
       </mesh>
@@ -258,7 +270,13 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
       <mesh position={[-10, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[20, 5, 0.2]} />
         <meshStandardMaterial
-          color={config.wallMaterial === 'brick' ? '#B22222' : '#F5F5F5'}
+          color={
+            config.wallMaterial === 'brick'
+              ? '#B22222'
+              : config.wallMaterial === 'wood'
+                ? '#DEB887'
+                : '#F5F5F5'
+          }
           roughness={0.9}
         />
       </mesh>
@@ -267,7 +285,13 @@ export const RoomEnvironment: React.FC<RoomEnvironmentProps> = ({
       <mesh position={[10, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[20, 5, 0.2]} />
         <meshStandardMaterial
-          color={config.wallMaterial === 'brick' ? '#B22222' : '#F5F5F5'}
+          color={
+            config.wallMaterial === 'brick'
+              ? '#B22222'
+              : config.wallMaterial === 'wood'
+                ? '#DEB887'
+                : '#F5F5F5'
+          }
           roughness={0.9}
         />
       </mesh>
