@@ -7,11 +7,15 @@ interface ControlPanelProps {
   roomObjects: RoomObject[];
   editMode: EditMode;
   showGrid: boolean;
+  wallMaterial: string;
+  floorMaterial: string;
   onViewModeChange: (mode: ViewMode) => void;
   onEditModeChange: (mode: EditMode) => void;
   onShowGridToggle: () => void;
   onObjectManagerOpen: () => void;
   onDeleteObject: (id: string) => void;
+  onWallMaterialChange: (material: string) => void;
+  onFloorMaterialChange: (material: string) => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -20,11 +24,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   roomObjects,
   editMode,
   showGrid,
+  wallMaterial,
+  floorMaterial,
   onViewModeChange,
   onEditModeChange,
   onShowGridToggle,
   onObjectManagerOpen,
-  onDeleteObject
+  onDeleteObject,
+  onWallMaterialChange,
+  onFloorMaterialChange
 }) => {
   const selectedObject = selectedObjectId
     ? roomObjects.find(obj => obj.id === selectedObjectId)
@@ -68,10 +76,38 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       )}
 
-      {/* Object Count */}
-      <div className="mb-3 text-xs text-gray-300">
-        配置済み: {roomObjects.length} 個
-      </div>
+  {/* Object Count */}
+  <div className="mb-3 text-xs text-gray-300">
+    配置済み: {roomObjects.length} 個
+  </div>
+
+  {/* Environment Settings */}
+  <div className="mb-3 space-y-2">
+    <div>
+      <label className="block text-xs text-gray-300 mb-1">🧱 壁素材</label>
+      <select
+        value={wallMaterial}
+        onChange={(e) => onWallMaterialChange(e.target.value)}
+        className="w-full bg-gray-700 rounded text-xs px-2 py-1"
+      >
+        <option value="concrete">コンクリート</option>
+        <option value="brick">レンガ</option>
+        <option value="wood">木材</option>
+      </select>
+    </div>
+    <div>
+      <label className="block text-xs text-gray-300 mb-1">🪵 床素材</label>
+      <select
+        value={floorMaterial}
+        onChange={(e) => onFloorMaterialChange(e.target.value)}
+        className="w-full bg-gray-700 rounded text-xs px-2 py-1"
+      >
+        <option value="wood">木材</option>
+        <option value="tile">タイル</option>
+        <option value="concrete">コンクリート</option>
+      </select>
+    </div>
+  </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-2 mb-3">
