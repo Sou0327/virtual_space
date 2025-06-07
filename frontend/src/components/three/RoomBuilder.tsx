@@ -19,7 +19,6 @@ import { useModelManager } from '../../hooks/useModelManager';
 import useAIModelGenerator from '../../hooks/useAIModelGenerator';
 
 // Types
-import type { RoomConfig } from '../../types/room';
 
 const RoomBuilder: React.FC = () => {
   const navigate = useNavigate();
@@ -224,11 +223,19 @@ const RoomBuilder: React.FC = () => {
           roomObjects={roomState.roomConfig.objects}
           editMode={roomState.editMode}
           showGrid={roomState.showGrid}
+          wallMaterial={roomState.roomConfig.wallMaterial}
+          floorMaterial={roomState.roomConfig.floorMaterial}
           onViewModeChange={roomState.setViewMode}
           onEditModeChange={roomState.setEditMode}
           onShowGridToggle={() => roomState.setShowGrid(!roomState.showGrid)}
           onObjectManagerOpen={() => roomState.setIsObjectManagerOpen(true)}
           onDeleteObject={roomState.deleteObject}
+          onWallMaterialChange={(material) =>
+            roomState.setRoomConfig(prev => ({ ...prev, wallMaterial: material }))
+          }
+          onFloorMaterialChange={(material) =>
+            roomState.setRoomConfig(prev => ({ ...prev, floorMaterial: material }))
+          }
         />
       )}
 
